@@ -2,6 +2,22 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.10.0] — 2026-08-30
+
+### Added
+
+- Deck.gl instanced `ColumnLayer` with Kepler-style `instancePositions` / `instanceColors` (≥20,480 extrusions). District LoD uses 4-sided disks; street LoD restores 168 true GeoJSON footprints. Particle / wind layers are memo-split from building layers so zoom/pan/scrub does not rebuild topology.
+- Hour-major Arrow column store (`lib/arrow-columns.ts`) for timeline scrub queries inside a 5 ms frame budget; HUD prints `Arrow scrub` separately from DuckDB ingest.
+- Named DuckDB-WASM Worker (`aeris-duckdb`) with a persistent connection; ingest is fingerprint-skipped and no longer re-runs on playbar scrub.
+- Neon composite indexes: `(centroid_lon, centroid_lat)`, `(district, centroid_lon, centroid_lat)`, `(created_at, scenario_name)`, `(run_id, timestamp)`, `(timestamp, cluster_id)`.
+- Client SWR cache for `/api/simulations` list and snapshot (`lib/sim-cache.ts`) — in-flight dedupe + 30 s TTL.
+- TwinCanvas district LoD: 20k centroid boxes, no per-face rings / shadows / wind trails; H3 aggregation moved off the rAF hot path.
+- `PERFORMANCE_AUDIT.md` before/after benches. Tests: `test:instance`, `test:arrow`, `test:cache`.
+
+### Changed
+
+- `runAerisAnalytics` depends on buildings / hourly cache / policy / footprints, not `queryHour`.
+
 ## [0.9.0] — 2026-08-30
 
 ### Added

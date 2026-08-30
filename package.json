@@ -22,6 +22,9 @@
     "test:h3": "tsx --test scripts/h3-index.test.ts",
     "test:db": "node --env-file=.env.local --import tsx --test scripts/db-schema.test.ts",
     "test:spatial": "tsx --test scripts/spatial-grid.test.ts",
+    "test:instance": "tsx --test scripts/instance-mesh.test.ts",
+    "test:arrow": "tsx --test scripts/arrow-columns.test.ts",
+    "test:cache": "tsx --test scripts/sim-cache.test.ts",
     "bench": "node --env-file=.env.local --import tsx scripts/benchmark.ts"
   },
   "dependencies": {

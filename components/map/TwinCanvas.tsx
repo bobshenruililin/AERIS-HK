@@ -14,6 +14,15 @@ import type { HudLayers } from "@/lib/hud";
 import { advectWindParticles, createWindParticles, type WindParticle } from "@/lib/wind-field";
 import { castGroundShadow, solarPositionHk, sunEnuFromLookAt } from "@/lib/solar-engine";
 import {
+  lodFromDistanceM,
+  packedInstanceColor,
+  packInstanceExtrusions,
+  sliceHourInstances,
+  type HourInstanceSlice,
+  type LodLevel,
+} from "@/lib/instance-mesh";
+import { wrapHour } from "@/lib/utils";
+import {
   HARBOUR_TWIN_VIEW,
   KOWLOON_TWIN_VIEW,
   TWIN_FLYIN_EVENT,
@@ -129,6 +138,29 @@ export function TwinCanvas() {
   }, [sim.buildings]);
 
   const spines = useMemo(() => streetSpinesFromBuildings(sim.buildings), [sim.buildings]);
+  const instancePack = useMemo(() => packInstanceExtrusions(sim.buildings, sim.cache), [sim.buildings, sim.cache]);
+  const hourFloor = Math.floor(wrapHour(sim.hour)) % 24;
+  const hourStates = useMemo(
+    () =>
+      sim.buildings
+        .map((b) => sim.cache.get(`${b.properties.id}:${hourFloor}`))
+        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
+    [sim.buildings, sim.cache, hourFloor],
+  );
+  const hexes9 = useMemo(
+    () => (sim.hudLayers.h3Hexes ? aggregateHeatPlumes(sim.buildings, hourStates, 9) : []),
+    [sim.buildings, hourStates, sim.hudLayers.h3Hexes],
+  );
+  const hexes10 = useMemo(
+    () => (sim.hudLayers.h3Hexes ? aggregateHeatPlumes(sim.buildings, hourStates, 10) : []),
+    [sim.buildings, hourStates, sim.hudLayers.h3Hexes],
+  );
+  const packRef = useRef(instancePack);
+  packRef.current = instancePack;
+  const hexes9Ref = useRef(hexes9);
+  hexes9Ref.current = hexes9;
+  const hexes10Ref = useRef(hexes10);
+  hexes10Ref.current = hexes10;
 
   const startFlyIn = useCallback(() => {
     orbitRef.current = null;
@@ -207,13 +239,17 @@ export function TwinCanvas() {
       } else if (orbitRef.current?.active) {
         viewRef.current = orbitView(orbitRef.current.base, now - orbitRef.current.t0);
       }
-      particlesRef.current = advectWindParticles(
-        particlesRef.current,
-        dt,
-        state.hour,
-        state.buildings,
-        state.forcing,
-      );
+      const lod = lodFromDistanceM(viewRef.current.distance);
+      if (lod > 0) {
+        particlesRef.current = advectWindParticles(
+          particlesRef.current,
+          dt,
+          state.hour,
+          state.buildings,
+          state.forcing,
+        );
+      }
+      const slice = sliceHourInstances(packRef.current, state.hour, lod);
       drawFrame(ctx, canvas, {
         view: viewRef.current,
         meshes,
@@ -230,6 +266,9 @@ export function TwinCanvas() {
         now,
         pickRef,
         layers: state.hudLayers,
+        lod,
+        instanceSlice: slice,
+        hexes: lod === 0 ? hexes9Ref.current : hexes10Ref.current,
       });
       raf = requestAnimationFrame(loop);
     };
@@ -289,6 +328,31 @@ export function TwinCanvas() {
   );
 }
 
+function drawDistrictInstances(
+  ctx: CanvasRenderingContext2D,
+  slice: HourInstanceSlice,
+  view: TwinView,
+  w: number,
+  h: number,
+  basis: ReturnType<typeof cameraBasis>,
+  dpr: number,
+  now: number,
+): void {
+  const pulse = 0.55 + 0.45 * Math.sin(now / 420);
+  for (let i = 0; i < slice.count; i += 1) {
+    const lon = slice.instancePositions[i * 3];
+    const lat = slice.instancePositions[i * 3 + 1];
+    const elev = slice.instanceElevations[i];
+    const enu = wgs84ToEnu(lon, lat, elev * 0.45);
+    const p = projectEnu(enu, view, w, h, basis);
+    if (!p.visible) continue;
+    const color = packedInstanceColor(slice, i);
+    const size = Math.max(1.4 * dpr, (elev / Math.max(80, view.distance)) * h * 0.42);
+    ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${0.55 + 0.2 * pulse})`;
+    ctx.fillRect(p.x - size * 0.28, p.y - size, size * 0.56, size);
+  }
+}
+
 function drawFrame(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -308,6 +372,9 @@ function drawFrame(
     now: number;
     pickRef: MutableRefObject<Array<{ id: string; x: number; y: number; depth: number; visible: boolean }>>;
     layers: HudLayers;
+    lod: LodLevel;
+    instanceSlice: HourInstanceSlice;
+    hexes: ReturnType<typeof aggregateHeatPlumes>;
   },
 ) {
   const parent = canvas.parentElement;
@@ -418,7 +485,7 @@ function drawFrame(
   );
   fillPoly(ctx, land, day ? "rgba(12, 18, 28, 0.96)" : "rgba(8, 12, 20, 0.97)", "rgba(15,23,42,0.8)", 1);
 
-  if (day && elev > 4) {
+  if (day && elev > 4 && args.lod === 2) {
     for (const mesh of args.meshes) {
       const roofUp = mesh.height;
       const shadow = mesh.ground.map((p) => castGroundShadow({ ...p, up: roofUp }, sun));
@@ -428,8 +495,7 @@ function drawFrame(
   }
 
   if (args.layers.h3Hexes) {
-    const hexes = aggregateHeatPlumes(args.buildings, args.snapshot.buildings, 10);
-    for (const cell of hexes) {
+    for (const cell of args.hexes) {
       const ring = cell.boundary.map(([lon, lat]) => wgs84ToEnu(lon, lat, 1.4));
       const projected = projectRing(ring, view, w, h, basis);
       fillPoly(ctx, projected, rgba(cell.color, 0.2), rgba(cell.color, 0.55), 1.1 * dpr);
@@ -438,24 +504,29 @@ function drawFrame(
 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  for (const spine of args.spines) {
-    const path = spine.path.map(([lon, lat]) => projectEnu(wgs84ToEnu(lon, lat, 1.2), view, w, h, basis));
-    if (path.length < 2) continue;
-    ctx.beginPath();
-    ctx.moveTo(path[0].x, path[0].y);
-    for (let i = 1; i < path.length; i += 1) ctx.lineTo(path[i].x, path[i].y);
-    ctx.strokeStyle = day ? "rgba(148,163,184,0.28)" : "rgba(34,211,238,0.22)";
-    ctx.lineWidth = 2.4 * dpr;
-    ctx.stroke();
+  if (args.lod > 0) {
+    for (const spine of args.spines) {
+      const path = spine.path.map(([lon, lat]) => projectEnu(wgs84ToEnu(lon, lat, 1.2), view, w, h, basis));
+      if (path.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i += 1) ctx.lineTo(path[i].x, path[i].y);
+      ctx.strokeStyle = day ? "rgba(148,163,184,0.28)" : "rgba(34,211,238,0.22)";
+      ctx.lineWidth = 2.4 * dpr;
+      ctx.stroke();
+    }
   }
 
+  const picks: Array<{ id: string; x: number; y: number; depth: number; visible: boolean }> = [];
+
+  if (args.lod === 0) {
+    drawDistrictInstances(ctx, args.instanceSlice, view, w, h, basis, dpr, args.now);
+  } else {
   const ordered = [...args.meshes].sort((a, b) => {
     const da = projectEnu(a.centroid, view, w, h, basis).depth;
     const db = projectEnu(b.centroid, view, w, h, basis).depth;
     return db - da;
   });
-
-  const picks: Array<{ id: string; x: number; y: number; depth: number; visible: boolean }> = [];
 
   for (const mesh of ordered) {
     const color = cviColor(cvi.get(mesh.id) ?? 0);
@@ -527,7 +598,7 @@ function drawFrame(
         const [r, g, b] = shadeRgb(color, face.normal, sun, ambient);
         const edge = highlight ? "rgba(34,211,238,0.95)" : gold ? "rgba(251,191,36,0.7)" : "rgba(15,23,42,0.55)";
         fillPoly(ctx, projected, `rgba(${r},${g},${b},${face.roof ? 0.96 : 0.9})`, edge, highlight ? 2.2 * dpr : 1);
-        if (!day && !face.roof && projected.length >= 4) {
+        if (args.lod === 2 && !day && !face.roof && projected.length >= 4) {
           ctx.fillStyle = "rgba(255, 214, 130, 0.42)";
           for (let k = 1; k <= 4; k += 1) {
             const t = k / 5;
@@ -575,8 +646,10 @@ function drawFrame(
       }
     }
   }
+  }
   args.pickRef.current = picks;
 
+  if (args.lod === 2) {
   const arcSources = args.focusedHospital
     ? args.buildings.filter((b) => {
         const spec = HOSPITALS.find((h) => h.code === args.focusedHospital);
@@ -606,11 +679,12 @@ function drawFrame(
     ctx.lineWidth = (1.2 + 3 * wgt) * dpr;
     ctx.stroke();
   }
+  }
 
-  if (args.layers.windVectors) {
+  if (args.layers.windVectors && args.lod > 0) {
     for (const p of args.particles) {
       const fade = Math.max(0.08, 0.62 * (1 - p.age / p.maxAge));
-      if (p.trail.length >= 2) {
+      if (args.lod === 2 && p.trail.length >= 2) {
         ctx.beginPath();
         let started = false;
         for (const [lon, lat] of p.trail) {

@@ -77,7 +77,9 @@ Authoritative CRS: **HK1980 Grid (EPSG:2326)** on `properties.hk80` and PostGIS 
 
 **Geospatial patterns**
 
-- Kepler.gl-style **instancing**: packed `Float32Array` colours / elevations / AC watts (`lib/gpu-attributes.ts`).
+- Kepler.gl-style **instancing**: 20,480 `instancePositions` / `instanceColors` on Deck.gl `ColumnLayer` (`lib/instance-mesh.ts`) plus packed 168-footprint attributes (`lib/gpu-attributes.ts`). District LoD uses 4-sided disks; street LoD restores true GeoJSON footprints.
+- Timeline scrub reads **hour-major Arrow columns** (`lib/arrow-columns.ts`) inside a 5 ms frame budget; DuckDB-WASM stays on a named `aeris-duckdb` Worker for ingest / knapsack SQL.
+- Client **SWR** cache (`lib/sim-cache.ts`) dedupes `/api/simulations` list and snapshot fetches. Neon composite indexes cover centroid bbox and `(run_id, timestamp)`.
 - Uber **H3** resolution 9 / 10 hex aggregation (`lib/h3-index.ts`), drawn as GeoJSON (not `@deck.gl/geo-layers` — that barrel pulls `mesh-layers` and breaks the Next 14 webpack build).
 - **CityJSON**-shaped building records: `id`, `height_m`, `year_built`, `storeys`, `typology`, `footprint` rings.
 
@@ -148,6 +150,7 @@ npm run test:crs && npm run test:ha && npm run test:cool-roof
 npm run test:twin && npm run test:decade && npm run test:solar
 npm run test:mc && npm run test:scenarios && npm run test:bio
 npm run test:h3 && npm run test:db && npm run test:spatial
+npm run test:instance && npm run test:arrow && npm run test:cache
 npm run build
 ```
 
@@ -165,6 +168,7 @@ npm run build
 | `components/` | TwinCanvas, Deck overlay, HUD, dock |
 | `scripts/` | Seed, neon ping, DuckDB bench |
 | `drizzle/` | SQL migrations |
+| `PERFORMANCE_AUDIT.md` | Before/after Deck.gl, Arrow, Neon benches |
 | `SYSTEM_INTELLIGENCE.md` | Formulas, CRS, SSR, measured benches |
 | `CHANGELOG.md` / `ROADMAP.md` | Leaves and remaining work |
 

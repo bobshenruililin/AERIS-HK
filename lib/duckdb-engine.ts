@@ -13,7 +13,8 @@ import type {
 } from "./types";
 import { classifyCvi } from "./epidemiology-engine";
 import { CVI_MODERATE_MAX } from "./constants";
-import { encodeCoolRoofCandidatesIpc, encodeHourlyIpc, hourlyRowsFromState, type HourIpcRow } from "./arrow-ipc";
+import { encodeCoolRoofCandidatesIpc, type HourIpcRow } from "./arrow-ipc";
+import { encodeHourColumnsIpc, groupDistrictHourlyColumns, packHourColumns, queryHourColumns } from "./arrow-columns";
 import { bindCoolRoofSql } from "./cool-roof-sql";
 import { emptyCoolRoofPlan, planFromSelected, selectCoolRoofsGreedyJs, totalRoofAreaM2 } from "./cool-roof-optimiser";
 import { attachWindowComparison, selectCoolRoofsKnapsack } from "./cool-roof-knapsack";
@@ -25,8 +26,11 @@ type AsyncDuckDBConnection = import("@duckdb/duckdb-wasm").AsyncDuckDBConnection
 
 let duckdbMod: DuckDbModule | null = null;
 let dbSingleton: AsyncDuckDB | null = null;
+let persistentConn: AsyncDuckDBConnection | null = null;
 let initPromise: Promise<AsyncDuckDB | null> | null = null;
 let ingestQueue: Promise<unknown> = Promise.resolve();
+let hoursFingerprint = "";
+let footprintsFingerprint = 0;
 
 function enqueueDuckDb<T>(fn: () => Promise<T>): Promise<T> {
   const next = ingestQueue.then(fn, fn);
@@ -56,12 +60,13 @@ async function instantiateDuckDb(): Promise<AsyncDuckDB | null> {
       const workerUrl = URL.createObjectURL(
         new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }),
       );
-      const worker = new Worker(workerUrl);
+      const worker = new Worker(workerUrl, { name: "aeris-duckdb" });
       const logger = new duckdbMod.ConsoleLogger();
       const db = new duckdbMod.AsyncDuckDB(logger, worker);
       await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
       URL.revokeObjectURL(workerUrl);
       dbSingleton = db;
+      persistentConn = await db.connect();
       return db;
     } catch (error) {
       console.warn("[AERIS-HK] DuckDB-WASM unavailable, using columnar fallback.", error);
@@ -213,20 +218,22 @@ async function queryDuckDb(
     ORDER BY 1, 2
   `);
   const critical = await conn.query(`
-    SELECT
-      h.building_id,
-      h.name_en,
-      h.name_zh,
-      ${districtExpr} AS district,
-      h.hour,
-      h.cvi,
-      h.micro_wbgt,
-      h.indoor_ta
-    FROM ${fromClause}
-    WHERE h.hour = ${Math.round(hour) % 24}
-      AND h.cvi >= ${CVI_MODERATE_MAX}
-    ORDER BY h.cvi DESC
-    LIMIT 10
+    SELECT * FROM (
+      SELECT
+        h.building_id,
+        h.name_en,
+        h.name_zh,
+        ${districtExpr} AS district,
+        h.hour,
+        h.cvi,
+        h.micro_wbgt,
+        h.indoor_ta,
+        ROW_NUMBER() OVER (PARTITION BY h.hour ORDER BY h.cvi DESC) AS rn
+      FROM ${fromClause}
+      WHERE h.cvi >= ${CVI_MODERATE_MAX}
+    ) ranked
+    WHERE rn <= 10
+    ORDER BY hour, cvi DESC
   `);
 
   const districtHourly: DistrictHourAggregate[] = [];
@@ -286,31 +293,44 @@ async function runAerisAnalyticsExclusive(args: {
   footprintsIpc?: Uint8Array | null;
 }): Promise<DuckDbQueryBundle> {
   const started = performance.now();
-  const rows = hourlyRowsFromState(args.buildings, args.hourly);
+  const store = packHourColumns(args.buildings, args.hourly);
+  const columnar = queryHourColumns(store, args.hour);
   const db = await instantiateDuckDb();
 
-  if (!db) {
-    return emptyBundle(rows, args.hour, started, "columnar-fallback");
+  if (!db || !persistentConn) {
+    return {
+      districtHourly: groupDistrictHourlyColumns(store),
+      topCritical: columnar.topCritical,
+      queryLatencyMs: columnar.elapsedMs,
+      engine: "arrow-columns",
+      footprintsLoaded: false,
+      footprintCount: 0,
+      arrowIpc: true,
+    };
   }
 
-  const conn = await db.connect();
+  const hoursFp = `${store.n}:${args.buildings.length}:${args.policy.coolRoofBudgetM2}`;
+  const footprintsFp = args.footprintsIpc?.byteLength ?? 0;
   try {
-    const hoursIpc = encodeHourlyIpc(rows);
-    await ingestIpcTable(db, conn, "building_hours", "building_hours.arrow", hoursIpc);
-
-    let useFootprints = false;
-    if (args.footprintsIpc && args.footprintsIpc.byteLength > 0) {
-      await ingestIpcTable(db, conn, "footprints", "footprints.arrow", args.footprintsIpc);
-      const joined = await conn.query(`
+    if (hoursFingerprint !== hoursFp) {
+      const ipc = encodeHourColumnsIpc(store);
+      await ingestIpcTable(db, persistentConn, "building_hours", "building_hours.arrow", ipc);
+      hoursFingerprint = hoursFp;
+    }
+    let useFootprints = footprintsFingerprint > 0 && footprintsFp === footprintsFingerprint;
+    if (args.footprintsIpc && args.footprintsIpc.byteLength > 0 && footprintsFingerprint !== footprintsFp) {
+      await ingestIpcTable(db, persistentConn, "footprints", "footprints.arrow", args.footprintsIpc);
+      const joined = await persistentConn.query(`
         SELECT COUNT(*)::INTEGER AS n
         FROM building_hours h
         INNER JOIN footprints f ON CAST(f.id AS VARCHAR) = CAST(h.building_id AS VARCHAR)
       `);
       const rec = joined.toArray()[0]?.toJSON() as Record<string, unknown> | undefined;
       useFootprints = Number(rec?.n ?? 0) > 0;
+      footprintsFingerprint = footprintsFp;
     }
 
-    const queried = await queryDuckDb(conn, args.hour, useFootprints);
+    const queried = await queryDuckDb(persistentConn, args.hour, useFootprints);
     return {
       ...queried,
       queryLatencyMs: performance.now() - started,
@@ -318,10 +338,16 @@ async function runAerisAnalyticsExclusive(args: {
       arrowIpc: true,
     };
   } catch (error) {
-    console.warn("[AERIS-HK] DuckDB Arrow IPC query failed; using columnar fallback.", error);
-    return emptyBundle(rows, args.hour, started, "columnar-fallback");
-  } finally {
-    await conn.close();
+    console.warn("[AERIS-HK] DuckDB Arrow IPC query failed; using Arrow columns.", error);
+    return {
+      districtHourly: columnar.districtHourly,
+      topCritical: columnar.topCritical,
+      queryLatencyMs: columnar.elapsedMs,
+      engine: "arrow-columns",
+      footprintsLoaded: false,
+      footprintCount: 0,
+      arrowIpc: true,
+    };
   }
 }
 
@@ -358,19 +384,18 @@ async function optimiseCoolRoofTargetsExclusive(args: {
   }
 
   const db = await instantiateDuckDb();
-  if (!db) {
+  if (!db || !persistentConn) {
     return attachWindowComparison(
       { ...exact, queryLatencyMs: performance.now() - started },
       windowFallback,
     );
   }
 
-  const conn = await db.connect();
   try {
     const ipc = encodeCoolRoofCandidatesIpc(args.candidates);
-    await ingestIpcTable(db, conn, "cool_roof_candidates", "cool_roof_candidates.arrow", ipc);
+    await ingestIpcTable(db, persistentConn, "cool_roof_candidates", "cool_roof_candidates.arrow", ipc);
     const sql = bindCoolRoofSql(args.budgetM2);
-    const result = await conn.query(sql);
+    const result = await persistentConn.query(sql);
     const byId = new Map(args.candidates.map((row) => [row.buildingId, row]));
     const selected: CoolRoofCandidate[] = [];
     let lastCum = 0;
@@ -398,16 +423,20 @@ async function optimiseCoolRoofTargetsExclusive(args: {
       { ...exact, queryLatencyMs: performance.now() - started },
       windowFallback,
     );
-  } finally {
-    await conn.close();
   }
 }
 
 export { totalRoofAreaM2 };
 
 export async function disposeDuckDb(): Promise<void> {
+  if (persistentConn) {
+    await persistentConn.close();
+    persistentConn = null;
+  }
   if (!dbSingleton) return;
   await dbSingleton.terminate();
   dbSingleton = null;
   initPromise = null;
+  hoursFingerprint = "";
+  footprintsFingerprint = 0;
 }

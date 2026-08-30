@@ -24,8 +24,12 @@ const DDL_STATEMENTS = [
     subdivided_flat_pct double precision NOT NULL,
     elderly_ratio double precision NOT NULL,
     baseline_ac_watts_sqm double precision NOT NULL,
-    uhi_vulnerability_score double precision NOT NULL
+    uhi_vulnerability_score double precision NOT NULL,
+    centroid_lon double precision NOT NULL DEFAULT 0,
+    centroid_lat double precision NOT NULL DEFAULT 0
   )`,
+  `ALTER TABLE buildings ADD COLUMN IF NOT EXISTS centroid_lon double precision NOT NULL DEFAULT 0`,
+  `ALTER TABLE buildings ADD COLUMN IF NOT EXISTS centroid_lat double precision NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS simulation_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -47,7 +51,13 @@ const DDL_STATEMENTS = [
     PRIMARY KEY (run_id, "timestamp", cluster_id)
   )`,
   `CREATE INDEX IF NOT EXISTS buildings_district_idx ON buildings (district)`,
+  `CREATE INDEX IF NOT EXISTS buildings_spatial_centroid_idx ON buildings (centroid_lon, centroid_lat)`,
+  `CREATE INDEX IF NOT EXISTS buildings_district_spatial_idx ON buildings (district, centroid_lon, centroid_lat)`,
+  `CREATE INDEX IF NOT EXISTS buildings_district_uhi_idx ON buildings (district, uhi_vulnerability_score)`,
   `CREATE INDEX IF NOT EXISTS simulation_runs_created_idx ON simulation_runs (created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS simulation_runs_created_scenario_idx ON simulation_runs (created_at DESC, scenario_name)`,
+  `CREATE INDEX IF NOT EXISTS hourly_cluster_run_ts_idx ON hourly_cluster_metrics (run_id, "timestamp")`,
+  `CREATE INDEX IF NOT EXISTS hourly_cluster_ts_cluster_idx ON hourly_cluster_metrics ("timestamp", cluster_id)`,
 ];
 
 export function getDrizzleHttp() {

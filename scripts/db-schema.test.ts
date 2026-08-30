@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getTableColumns } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { buildings, hourlyClusterMetrics, simulationRuns } from "../lib/db/schema";
 import { buildingToPersistenceRow, BUILDING_COLUMN_KEYS } from "../lib/db/mapping";
 import { getBuildings } from "../lib/spatial-data";
@@ -21,6 +22,8 @@ describe("Drizzle persistence schema", () => {
       "elderly_ratio",
       "baseline_ac_watts_sqm",
       "uhi_vulnerability_score",
+      "centroid_lon",
+      "centroid_lat",
     ]) {
       assert.ok(
         Object.values(cols).some((col) => col.name === name),
@@ -57,6 +60,22 @@ describe("Drizzle persistence schema", () => {
     }
   });
 
+  it("declares composite spatial and timestamp indexes", () => {
+    const buildingIdx = getTableConfig(buildings).indexes.map((idx) => idx.config.name);
+    const runIdx = getTableConfig(simulationRuns).indexes.map((idx) => idx.config.name);
+    const hourIdx = getTableConfig(hourlyClusterMetrics).indexes.map((idx) => idx.config.name);
+    for (const name of [
+      "buildings_spatial_centroid_idx",
+      "buildings_district_spatial_idx",
+      "buildings_district_uhi_idx",
+    ]) {
+      assert.ok(buildingIdx.includes(name), `missing ${name} (${buildingIdx.join(",")})`);
+    }
+    assert.ok(runIdx.includes("simulation_runs_created_scenario_idx"));
+    assert.ok(hourIdx.includes("hourly_cluster_run_ts_idx"));
+    assert.ok(hourIdx.includes("hourly_cluster_ts_cluster_idx"));
+  });
+
   it("maps Kowloon West footprints to census-like tenement rows", () => {
     const rows = getBuildings().map(buildingToPersistenceRow);
     assert.ok(rows.length >= 50);
@@ -68,6 +87,8 @@ describe("Drizzle persistence schema", () => {
       assert.ok(row.subdividedFlatPct >= 0 && row.subdividedFlatPct <= 100);
       assert.ok(row.osmId > 90_000_000);
       assert.ok(row.uhiVulnerabilityScore >= 0);
+      assert.ok(row.centroidLon > 114.1 && row.centroidLon < 114.3);
+      assert.ok(row.centroidLat > 22.2 && row.centroidLat < 22.4);
     }
   });
 

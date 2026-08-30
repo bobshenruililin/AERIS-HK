@@ -39,6 +39,7 @@ import {
 } from "@/lib/gpu-attributes";
 import { ThermalShimmerExtension } from "@/lib/thermal-shimmer-extension";
 import { VenturiStreamExtension } from "@/lib/venturi-stream-extension";
+import { lodFromZoom, packInstanceExtrusions, sliceHourInstances } from "@/lib/instance-mesh";
 
 interface PlumeRow {
   id: string;
@@ -104,12 +105,24 @@ export default function AERISMap() {
 
   const spines = useMemo(() => streetSpinesFromBuildings(buildings), [buildings]);
   const hourFloor = Math.floor(hour) % 24;
+  const lod = lodFromZoom(viewState.zoom ?? KOWLOON_VIEW.zoom);
   const gpuPack = useMemo(() => packDiurnalGpuAttributes(buildings, cache), [buildings, cache]);
+  const instancePack = useMemo(() => packInstanceExtrusions(buildings, cache), [buildings, cache]);
+  const hourSlice = useMemo(() => sliceHourInstances(instancePack, hourFloor, lod), [instancePack, hourFloor, lod]);
+  const instancePackRef = useRef(instancePack);
+  instancePackRef.current = instancePack;
   const shimmerExtension = useMemo(() => new ThermalShimmerExtension(), []);
   const venturiExtension = useMemo(() => new VenturiStreamExtension(), []);
+  const hourStates = useMemo(
+    () =>
+      buildings
+        .map((b) => cache.get(`${b.properties.id}:${hourFloor}`))
+        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
+    [buildings, cache, hourFloor],
+  );
   const hexes = useMemo(
-    () => (hudLayers.h3Hexes ? aggregateHeatPlumes(buildings, snapshot.buildings, 10) : []),
-    [buildings, snapshot.buildings, hudLayers.h3Hexes],
+    () => (hudLayers.h3Hexes ? aggregateHeatPlumes(buildings, hourStates, lod === 0 ? 9 : 10) : []),
+    [buildings, hourStates, hudLayers.h3Hexes, lod],
   );
 
   useEffect(() => {
@@ -124,6 +137,9 @@ export default function AERISMap() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const lodRef = useRef(lod);
+  lodRef.current = lod;
+
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -131,9 +147,13 @@ export default function AERISMap() {
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      if (lodRef.current === 0) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       particlesRef.current = advectWindParticles(particlesRef.current, dt, hour, buildings, forcing);
       emit += dt;
-      if (emit >= 1 / 28) {
+      if (emit >= 1 / 8) {
         setParticles(particlesRef.current);
         setGpuTime(now / 1000);
         emit = 0;
@@ -215,13 +235,13 @@ export default function AERISMap() {
 
   const streaks = useMemo(() => windStreaksFromParticles(particles), [particles]);
 
-  const layers = useMemo(() => {
+  const cityLayers = useMemo(() => {
     const highlightId = selectedId ?? hoveredId;
     const night = !isDaylight(hour);
     return [
       new PathLayer({
         id: "street-spines",
-        data: spines,
+        data: lod === 0 ? [] : spines,
         getPath: (d) => d.path,
         getColor: night ? [34, 211, 238, 70] : [148, 163, 184, 50],
         getWidth: 7,
@@ -269,10 +289,11 @@ export default function AERISMap() {
       new GeoJsonLayer<BuildingProperties>({
         id: "aeris-buildings",
         data: collection,
+        visible: lod === 2,
         extruded: true,
         filled: !hudLayers.buildingWireframes,
         wireframe: true,
-        pickable: true,
+        pickable: lod === 2,
         opacity: hudLayers.buildingWireframes ? 0.35 : 0.96,
         getElevation: (f) => packedElevationAt(gpuPack, f.properties.id, hourFloor),
         getFillColor: (f) => packedColorAt(gpuPack, f.properties.id, hourFloor),
@@ -302,9 +323,39 @@ export default function AERISMap() {
         acPulse: acPulseFromHour(hour, hudLayers.thermalShimmer),
         getAcWatts: (f: { properties: BuildingProperties }) => packedAcWattsAt(gpuPack, f.properties.id, hourFloor),
       } as ConstructorParameters<typeof GeoJsonLayer<BuildingProperties>>[0]),
+      new ColumnLayer({
+        id: "aeris-instances",
+        visible: lod < 2 && hourSlice.count > 0,
+        data: {
+          length: hourSlice.count,
+          attributes: {
+            getPosition: { value: hourSlice.instancePositions, size: 3 },
+            getFillColor: { value: hourSlice.instanceColors, size: 4, normalized: true },
+            getElevation: { value: hourSlice.instanceElevations, size: 1 },
+            getAcWatts: { value: hourSlice.instanceAcWatts, size: 1 },
+          },
+        },
+        diskResolution: lod === 0 ? 4 : 6,
+        radius: lod === 0 ? 18 : 11,
+        extruded: true,
+        pickable: lod < 2,
+        material: {
+          ambient: 0.32,
+          diffuse: 0.62,
+          shininess: 18,
+          specularColor: [40, 44, 52],
+        },
+        extensions: hudLayers.thermalShimmer ? [shimmerExtension] : [],
+        acPulse: acPulseFromHour(hour, hudLayers.thermalShimmer),
+        updateTriggers: {
+          getFillColor: hourFloor,
+          getElevation: hourFloor,
+          getAcWatts: hourFloor,
+        },
+      } as ConstructorParameters<typeof ColumnLayer>[0]),
       new ColumnLayer<PlumeRow>({
         id: "cvi-heat-plumes",
-        data: hudLayers.thermalShimmer ? plumes : [],
+        data: hudLayers.thermalShimmer && lod > 0 ? plumes : [],
         diskResolution: 6,
         radius: 4.2,
         extruded: true,
@@ -316,7 +367,7 @@ export default function AERISMap() {
       }),
       new ScatterplotLayer<RoofDisc>({
         id: "cool-roof-discs",
-        data: roofDiscs,
+        data: lod === 2 ? roofDiscs : [],
         getPosition: (d) => d.position,
         getRadius: (d) => d.radius,
         radiusUnits: "meters",
@@ -342,7 +393,7 @@ export default function AERISMap() {
       }),
       new ArcLayer<CatchmentArc>({
         id: "catchment-arcs",
-        data: arcs,
+        data: lod === 2 ? arcs : [],
         getSourcePosition: (d) => d.source,
         getTargetPosition: (d) => d.target,
         getSourceColor: focusedHospital ? [34, 211, 238, 160] : [251, 191, 36, 180],
@@ -350,39 +401,6 @@ export default function AERISMap() {
         getWidth: (d) => d.width,
         widthUnits: "pixels",
         greatCircle: false,
-      }),
-      new PathLayer({
-        id: "venturi-streamlines",
-        data: hudLayers.windVectors ? streaks : [],
-        getPath: (d: { path: [number, number][] }) => d.path,
-        getColor: (d: { stalled: boolean; venturi: number; alpha: number }) =>
-          d.stalled
-            ? [148, 163, 184, Math.round(90 * d.alpha)]
-            : d.venturi > 1.25
-              ? [251, 191, 36, Math.round(210 * d.alpha)]
-              : [34, 211, 238, Math.round(180 * d.alpha)],
-        getWidth: (d: { stalled: boolean; venturi: number }) =>
-          d.stalled ? 3 : 4 + 6 * Math.min(1.5, Math.max(0, d.venturi - 1)),
-        widthUnits: "meters",
-        capRounded: true,
-        jointRounded: true,
-        extensions: [venturiExtension],
-        venturiTime: gpuTime,
-        updateTriggers: { getColor: gpuTime, getWidth: gpuTime },
-      } as ConstructorParameters<typeof PathLayer>[0]),
-      new ScatterplotLayer<WindParticle>({
-        id: "canyon-wind-particles",
-        data: hudLayers.windVectors ? particles : [],
-        getPosition: (d) => [d.lon, d.lat],
-        getRadius: (d) => 1.4 + d.speed * 0.35,
-        radiusUnits: "meters",
-        radiusMinPixels: 1.2,
-        radiusMaxPixels: 5,
-        getFillColor: (d) => {
-          const fade = Math.max(50, 230 * (1 - d.age / d.maxAge));
-          if (d.stalled) return [148, 163, 184, fade * 0.55];
-          return d.venturi > 1.25 ? [251, 191, 36, fade] : [34, 211, 238, fade];
-        },
       }),
       new ScatterplotLayer<(typeof HOSPITALS)[number]>({
         id: "ha-hospitals",
@@ -404,16 +422,14 @@ export default function AERISMap() {
     collection,
     gpuPack,
     hourFloor,
+    hourSlice,
+    lod,
     hexes,
     shimmerExtension,
-    venturiExtension,
-    gpuTime,
-    streaks,
     hour,
     hoveredId,
     selectedId,
     buildings,
-    particles,
     targeted,
     policy.coolRoofTargetIds,
     plumes,
@@ -423,6 +439,47 @@ export default function AERISMap() {
     focusedHospital,
     hudLayers,
   ]);
+
+  const windLayers = useMemo(() => {
+    if (lod === 0 || !hudLayers.windVectors) return [];
+    return [
+      new PathLayer({
+        id: "venturi-streamlines",
+        data: lod === 2 ? streaks : [],
+        getPath: (d: { path: [number, number][] }) => d.path,
+        getColor: (d: { stalled: boolean; venturi: number; alpha: number }) =>
+          d.stalled
+            ? [148, 163, 184, Math.round(90 * d.alpha)]
+            : d.venturi > 1.25
+              ? [251, 191, 36, Math.round(210 * d.alpha)]
+              : [34, 211, 238, Math.round(180 * d.alpha)],
+        getWidth: (d: { stalled: boolean; venturi: number }) =>
+          d.stalled ? 3 : 4 + 6 * Math.min(1.5, Math.max(0, d.venturi - 1)),
+        widthUnits: "meters",
+        capRounded: true,
+        jointRounded: true,
+        extensions: [venturiExtension],
+        venturiTime: gpuTime,
+        updateTriggers: { getColor: gpuTime, getWidth: gpuTime },
+      } as ConstructorParameters<typeof PathLayer>[0]),
+      new ScatterplotLayer<WindParticle>({
+        id: "canyon-wind-particles",
+        data: particles,
+        getPosition: (d) => [d.lon, d.lat],
+        getRadius: (d) => 1.4 + d.speed * 0.35,
+        radiusUnits: "meters",
+        radiusMinPixels: 1.2,
+        radiusMaxPixels: 5,
+        getFillColor: (d) => {
+          const fade = Math.max(50, 230 * (1 - d.age / d.maxAge));
+          if (d.stalled) return [148, 163, 184, fade * 0.55];
+          return d.venturi > 1.25 ? [251, 191, 36, fade] : [34, 211, 238, fade];
+        },
+      }),
+    ];
+  }, [lod, hudLayers.windVectors, streaks, particles, gpuTime, venturiExtension]);
+
+  const layers = useMemo(() => [...cityLayers, ...windLayers], [cityLayers, windLayers]);
 
   const onViewStateChange = useCallback((params: { viewState: Record<string, unknown> }) => {
     const next = params.viewState;
@@ -448,6 +505,15 @@ export default function AERISMap() {
   const onHover = useCallback(
     (info: PickingInfo<BuildingFeature>) => {
       if (info.layer?.id === "ha-hospitals") return;
+      if (info.layer?.id === "aeris-instances") {
+        const idx = info.index;
+        if (idx == null || idx < 0) {
+          setHoveredId(null);
+          return;
+        }
+        setHoveredId(instancePackRef.current.parentIds[idx] ?? null);
+        return;
+      }
       const id = info.object?.properties?.id ?? null;
       setHoveredId(id);
     },
@@ -463,7 +529,10 @@ export default function AERISMap() {
         }
         return;
       }
-      const id = (info.object as BuildingFeature | undefined)?.properties?.id;
+      let id = (info.object as BuildingFeature | undefined)?.properties?.id;
+      if (!id && info.layer?.id === "aeris-instances" && info.index != null && info.index >= 0) {
+        id = instancePackRef.current.parentIds[info.index];
+      }
       if (id) {
         setFocusedHospital(null);
         setSelectedId(id);

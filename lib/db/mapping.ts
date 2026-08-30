@@ -2,6 +2,7 @@ import { getTableColumns } from "drizzle-orm";
 import { buildings } from "./schema";
 import type { BuildingFeature } from "../types";
 import { clamp, hashString, roundTo } from "../utils";
+import { buildingCentroid } from "../spatial-data";
 import type { GeoJsonPolygon } from "./types";
 
 export interface BuildingPersistenceRow {
@@ -16,6 +17,8 @@ export interface BuildingPersistenceRow {
   elderlyRatio: number;
   baselineAcWattsSqm: number;
   uhiVulnerabilityScore: number;
+  centroidLon: number;
+  centroidLat: number;
 }
 
 /** Mean storey height for Sham Shui Po / Yau Ma Tei walk-up tong lau (Census + BD typical). */
@@ -39,6 +42,7 @@ export function buildingToPersistenceRow(feature: BuildingFeature): BuildingPers
     ),
     3,
   );
+  const [centroidLon, centroidLat] = buildingCentroid(feature);
   return {
     id: p.id,
     osmId: 90_000_000 + (hashString(p.id) % 9_000_000),
@@ -54,6 +58,8 @@ export function buildingToPersistenceRow(feature: BuildingFeature): BuildingPers
     elderlyRatio: p.elderlyRatio,
     baselineAcWattsSqm,
     uhiVulnerabilityScore,
+    centroidLon: roundTo(centroidLon, 7),
+    centroidLat: roundTo(centroidLat, 7),
   };
 }
 

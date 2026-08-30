@@ -36,6 +36,7 @@ import {
 } from "@/lib/epidemiology-engine";
 import { wrapHour } from "@/lib/utils";
 import { optimiseCoolRoofTargets, runAerisAnalytics } from "@/lib/duckdb-engine";
+import { packHourColumns, queryHourColumns } from "@/lib/arrow-columns";
 import {
   defaultCoolRoofBudgetM2,
   rankCoolRoofCandidates,
@@ -94,6 +95,8 @@ interface SimulationContextValue {
   hoveredId: string | null;
   setHoveredId: (id: string | null) => void;
   analytics: DuckDbQueryBundle | null;
+  /** Arrow column scrub (hour floor) — UI-thread, target < 5 ms. Not DuckDB ingest. */
+  scrubQueryMs: number;
   cache: Map<string, BuildingHourState>;
   envelope: HkoDiurnalEnvelope | null;
   envelopeError: string | null;
@@ -425,13 +428,35 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   const hourlyFlat = useMemo(() => Array.from(cache.values()), [cache]);
   const queryHour = Math.round(wrapHour(hour)) % 24;
+  const queryHourRef = useRef(queryHour);
+  queryHourRef.current = queryHour;
+  const hourStore = useMemo(() => packHourColumns(buildings, hourlyFlat), [buildings, hourlyFlat]);
+  const scrubColumns = useMemo(() => queryHourColumns(hourStore, queryHour), [hourStore, queryHour]);
+  const [scrubQueryMs, setScrubQueryMs] = useState(0);
+  useEffect(() => {
+    setScrubQueryMs(scrubColumns.elapsedMs);
+  }, [scrubColumns]);
+
+  const liveAnalytics = useMemo<DuckDbQueryBundle | null>(() => {
+    if (hourStore.n === 0 && !analytics) return null;
+    const hourRows = analytics?.districtHourly.filter((row) => row.hour === queryHour) ?? [];
+    return {
+      districtHourly: hourRows.length > 0 ? hourRows : scrubColumns.districtHourly,
+      topCritical: scrubColumns.topCritical,
+      queryLatencyMs: analytics?.queryLatencyMs ?? scrubColumns.elapsedMs,
+      engine: analytics?.engine ?? "arrow-columns",
+      footprintsLoaded: analytics?.footprintsLoaded ?? false,
+      footprintCount: analytics?.footprintCount ?? 0,
+      arrowIpc: analytics?.arrowIpc ?? true,
+    };
+  }, [analytics, hourStore.n, queryHour, scrubColumns]);
 
   useEffect(() => {
     let cancelled = false;
     void runAerisAnalytics({
       buildings,
       hourly: hourlyFlat,
-      hour: queryHour,
+      hour: queryHourRef.current,
       policy,
       footprintsIpc: footprintsIpcRef.current,
     }).then((bundle) => {
@@ -440,7 +465,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [buildings, hourlyFlat, queryHour, policy, footprintsEpoch]);
+  }, [buildings, hourlyFlat, policy, footprintsEpoch]);
 
   useEffect(() => {
     if (!playing) return undefined;
@@ -708,7 +733,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       setSelectedId,
       hoveredId,
       setHoveredId,
-      analytics,
+      analytics: liveAnalytics,
+      scrubQueryMs,
       cache,
       envelope: forcedEnvelope,
       envelopeError,
@@ -764,7 +790,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       impact,
       selectedId,
       hoveredId,
-      analytics,
+      liveAnalytics,
+      scrubQueryMs,
       cache,
       forcedEnvelope,
       envelopeError,

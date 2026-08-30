@@ -171,6 +171,9 @@ air cooling scales as \(50 \times A_{\mathrm{selected}} / A_{\mathrm{stock}}\).
 | SpatialGrid (typed arrays) | Sub-10 ms bbox / kNN over 24k–50k ENU vectors | `lib/spatial-grid.ts` |
 | H3 res 9/10 | Hex aggregation drawn as GeoJSON (no `@deck.gl/geo-layers` barrel) | `lib/h3-index.ts` |
 | Packed GPU attributes | 168 × 24 colours / elevations / AC watts | `lib/gpu-attributes.ts` |
+| Instanced ColumnLayer | 20,480 `instancePositions` / `instanceColors`, LoD 0/1/2 | `lib/instance-mesh.ts` |
+| Arrow hour columns | < 5 ms scrub, hour-major subarrays | `lib/arrow-columns.ts` |
+| Simulation SWR | 30 s TTL + in-flight dedupe for Neon runs | `lib/sim-cache.ts` |
 
 SpatialGrid cell size is 40 m. Densification jitter-samples alley edges so
 the index is not only 168 centroids. HUD ticker reports live bbox / kNN

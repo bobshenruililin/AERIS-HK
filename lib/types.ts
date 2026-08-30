@@ -262,7 +262,7 @@ export interface DuckDbQueryBundle {
   districtHourly: DistrictHourAggregate[];
   topCritical: CriticalBuildingRow[];
   queryLatencyMs: number;
-  engine: "duckdb-wasm" | "columnar-fallback";
+  engine: "duckdb-wasm" | "columnar-fallback" | "arrow-columns";
   footprintsLoaded: boolean;
   footprintCount: number;
   arrowIpc: boolean;

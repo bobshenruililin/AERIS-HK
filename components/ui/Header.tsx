@@ -14,6 +14,7 @@ export function Header() {
   const {
     snapshot,
     analytics,
+    scrubQueryMs,
     hour,
     envelope,
     envelopeError,
@@ -154,10 +155,13 @@ export function Header() {
                 ? `HA ${haError}`
                 : "HA ingest…"}
           </span>
-          <span>
+          <span data-testid="duckdb-ingest-ms">
             {analytics
-              ? `${analytics.engine}${analytics.arrowIpc ? " IPC" : ""} ${analytics.queryLatencyMs.toFixed(0)} ms`
+              ? `${analytics.engine}${analytics.arrowIpc ? " IPC" : ""} ingest ${analytics.queryLatencyMs.toFixed(0)} ms`
               : "DuckDB warming"}
+          </span>
+          <span data-testid="scrub-query-ms">
+            Arrow scrub {scrubQueryMs.toFixed(2)} ms
           </span>
           <span data-testid="spatial-grid-stats">
             {spatialIndex.vectorCount
