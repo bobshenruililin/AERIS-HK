@@ -100,6 +100,7 @@ Authoritative CRS: **HK1980 Grid (EPSG:2326)** on `properties.hk80` and PostGIS 
 | M/M/c | Erlang-C wait, ρ, 8-hour overflow | `lib/epidemiology-engine.ts` |
 | Monte Carlo | 1,000 draws, 95% CI on HA beds | `lib/monte-carlo.ts` |
 | Cool-roof knapsack | DuckDB `SUM() OVER` + 0/1 DP | `lib/duckdb-engine.ts` |
+| NSGA-II Pareto | 500 gen, cost / Cat 1–3 averted / ΔGini / MW | `lib/optimization/` |
 
 Hospital Authority clusters in the twin: **CMC** (Caritas Medical Centre), **KWH** (Kwong Wah), **QEH** (Queen Elizabeth). Live HKO / HA pollers remain on 60 s / 5 min cadences.
 
@@ -166,7 +167,7 @@ npm run build
 | `static/` | District choropleth UI |
 | `tests/` | Python pytest suite |
 | `app/` | Next.js App Router + `/api/simulations` |
-| `lib/` | CRS, physics, Neon, DuckDB, H3, GPU, Spatial Policy Copilot |
+| `lib/` | CRS, physics, Neon, DuckDB, H3, GPU, Spatial Policy Copilot, NSGA-II Pareto |
 | `components/` | TwinCanvas, Deck overlay, HUD, dock, `components/copilot/PolicyAgent.tsx` |
 | `scripts/` | Seed, neon ping, DuckDB bench |
 | `drizzle/` | SQL migrations |

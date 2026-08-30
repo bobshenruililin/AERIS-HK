@@ -1,11 +1,12 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { Shield, ThermometerSun, UserRound, Building } from "lucide-react";
+import { Shield, ThermometerSun, UserRound, Building, Trees, Fan } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { HudDrawer, HudPill } from "@/components/ui/HudDrawer";
 import { MonteCarloPanel } from "@/components/ui/MonteCarloPanel";
+import { ParetoFrontierView } from "@/components/ui/ParetoFrontierView";
 import { BASELINE_POLICY } from "@/lib/types";
 import { STRESS_SCENARIOS } from "@/lib/scenarios";
 
@@ -119,6 +120,30 @@ export function PolicyDrawer() {
           testId="cool-roof-budget"
           onChange={(coolRoofBudgetM2) => setPolicy({ coolRoofBudgetM2 })}
         />
+        <Slider
+          icon={<Trees className="h-3.5 w-3.5" />}
+          label="Urban canopy greenery"
+          zh="街道樹蔭與綠化覆蓋"
+          value={policy.canopyGreeneryPercent ?? 0}
+          min={0}
+          max={100}
+          step={1}
+          display={`${(policy.canopyGreeneryPercent ?? 0).toFixed(0)}% cover`}
+          testId="canopy-greenery"
+          onChange={(canopyGreeneryPercent) => setPolicy({ canopyGreeneryPercent })}
+        />
+        <Slider
+          icon={<Fan className="h-3.5 w-3.5" />}
+          label="Tenement AC efficiency grants"
+          zh="劏房空調能效資助"
+          value={policy.acEfficiencyGrantPct ?? 0}
+          min={0}
+          max={100}
+          step={1}
+          display={`${(policy.acEfficiencyGrantPct ?? 0).toFixed(0)}% uptake`}
+          testId="ac-efficiency-grant"
+          onChange={(acEfficiencyGrantPct) => setPolicy({ acEfficiencyGrantPct })}
+        />
         <div
           className="mb-2 rounded-xl border border-amber-300/20 bg-amber-400/5 px-3 py-2 text-[11px] text-amber-100/90"
           data-testid="cool-roof-plan"
@@ -184,6 +209,7 @@ export function PolicyDrawer() {
           />
         </div>
         <MonteCarloPanel result={monteCarlo} running={monteCarloRunning} />
+        <ParetoFrontierView />
         <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
           Deltas versus a zero-intervention counterfactual ({BASELINE_POLICY.coolingShelters} shelters, no DHC, no albedo, no bylaw).
           Cool-roof targeting solves an exact 0/1 knapsack on 24-hour admissions averted / m² (DuckDB{" "}

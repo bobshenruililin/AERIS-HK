@@ -33,6 +33,7 @@ export function CommandPalette() {
     savedRuns,
     loadSimulation,
     setCopilotPanelOpen,
+    runParetoSolver,
   } = sim;
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +157,16 @@ export function CommandPalette() {
         icon: "policy",
         run: () => setCopilotPanelOpen(true),
       },
+      {
+        id: "run-pareto",
+        group: "Policy presets",
+        label: "Run Pareto solver",
+        hint: "NSGA-II · 500 gen · four levers",
+        icon: "policy",
+        run: () => {
+          void runParetoSolver();
+        },
+      },
     ];
     const all = [
       ...copilotItems,
@@ -178,7 +189,7 @@ export function CommandPalette() {
         ) || STREET_QUERIES.some((row) => row.q.some((alias) => alias.includes(q) || q.includes(alias)) && item.label.toLowerCase().includes(row.street.toLowerCase()));
       })
       .slice(0, 24);
-  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario, savedRuns, loadSimulation, setCopilotPanelOpen]);
+  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario, savedRuns, loadSimulation, setCopilotPanelOpen, runParetoSolver]);
 
   return (
     <AnimatePresence>

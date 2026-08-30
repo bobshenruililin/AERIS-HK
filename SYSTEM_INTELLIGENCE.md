@@ -325,3 +325,42 @@ Sol-Air Eq. 3 is `q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)` in `lib/sola
 
 Zero-deletion invariant unchanged from §10.
 
+---
+
+## 12. Delivery ledger — Pareto frontier solver (0.14.0)
+
+Requirement-by-requirement evidence. Gates: `npx tsc --noEmit`, `npm run test:pareto`.
+
+### 12.1 Pareto objective matrix
+
+| Objective | Direction | Identity | Module |
+| --- | --- | --- | --- |
+| Total municipal + household cost (HKD) | Minimize | Cool roof 480/m² + shelters 18k + DHC 2.4k/% + canopy 92k/% + AC grant 3.6k municipal + 1.2k household per 劏房 unit | `lib/executive-briefing.ts` `interventionSpend` |
+| Cat 1–3 ED visits averted (KWC) | Maximize | 24 h Σ λ_cat13(baseline) − Σ λ_cat13(scenario); GA samples hours 03/15/21 then scales ×8 | `evaluateBuildingCat13Lite` → `hourlyArrivalsForBuilding` |
+| Thermal inequity reduction (tenement / 劏房) | Maximize | ΔG = G_baseline − G_scenario; weighted Gini of indoor T_a, ρ_sub ≥ 0.4, mass = residents, 15:00 HKT | `lib/optimization/gini.ts` |
+| Grid peak HVAC strain (MW) | Minimize | P = Σ_b (q_AC,b · A_roof,b) / 10⁶ at 15:00; q_AC = `effectiveAcHeat` (W/m²) | `peakHvacLoadMw` |
+
+Search uses the same canyon / indoor lag / ISO 7243 WBGT / CVI / Bishai path as the HUD. Fanger PMV and astronomical insolation are skipped inside the GA; clicking a front point runs the full `precomputeHourlyCache` + knapsack + M/M/c recompute.
+
+### 12.2 Client-side Web Worker (`lib/optimization/pareto-worker.ts`)
+
+NSGA-II (non-dominated sorting, crowding distance, binary tournament, SBX ηc=15, polynomial mutation ηm=20) for **500 generations**, population 32. Levers: cool-roof rebate % of roof stock, canopy %, AC grant %, night shelters 0–30. Cool-roof genomes apply a window-greedy prefix of the live η-ranked candidate table; HUD click writes `coolRoofBudgetM2` so DuckDB/exact knapsack retargets.
+
+`canUseParetoWorker()` is the Monte Carlo Worker probe. Timeout 180 s or `onerror` falls back to yielded `sync-js` (`setTimeout(0)` every 10 generations) so the genetic loop never blocks Arrow scrub (< 5 ms) or rAF playback.
+
+### 12.3 Interactive 2D/3D chart (`components/ui/ParetoFrontierView.tsx`)
+
+SVG Cost vs averted-hospitalizations curve; 3D isometric uses ΔGini as the third axis; marker size inverse to MW. `data-testid="pareto-frontier"` / `pareto-point-*`. The chart consumes `ParetoSolverContext` (not `hour`) so diurnal scrub does not redraw the frontier. Click → `applyParetoPoint` → `setPolicy` of the four levers → 3D map CVI and Hospital Board recompute.
+
+### 12.4 SSR / TypeScript
+
+| Gate | Evidence |
+| --- | --- |
+| SSR | Pareto view and `pareto-client.ts` are `"use client"`. Worker file has `/// <reference lib="webworker" />`. |
+| `npx tsc --noEmit` | `npm run typecheck` |
+| Tests | `npm run test:pareto` — Gini, dominance, canopy cooling, AC MW cut, 12-gen front, **500-gen** tiny run |
+| 60 FPS scrub | NSGA-II is not on the TimeScrubber / Arrow column path; solver starts only from the Run button, dock, or ⌘K |
+
+Zero-deletion invariant unchanged from §11.
+
+

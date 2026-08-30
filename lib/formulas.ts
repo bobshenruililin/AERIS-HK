@@ -55,6 +55,25 @@ export const FORMULAS = {
     identity: "q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)   ρ_asphalt=0.18  ρ_cool=0.65",
     note: "Absorbed roof shortwave in lib/solar.ts roofAbsorbedShortwaveWm2. I_peak = 890 W/m². Not a Fiala UTCI term.",
   },
+  nsga2: {
+    id: "nsga2",
+    name: "NSGA-II Pareto frontier",
+    identity:
+      "min (C_muni+hh, −A_cat13, −ΔGini_tenement, P_MW)  |  500 gen · pop 32 · SBX ηc=15 · poly-mut ηm=20",
+    note: "Client Web Worker in lib/optimization/. Rank-1 non-dominated set. Click a point to write the four levers into PolicyState; the HUD then recomputes Gagge / M/M/c / knapsack on the main twin.",
+  },
+  gini: {
+    id: "gini",
+    name: "Thermal inequity (weighted Gini)",
+    identity: "G = (2 Σ x_i w_i S_i − Σ x_i w_i²) / (W Σ x w) − 1   x = indoor T_a,  ρ_sub ≥ 0.4",
+    note: "Residents of tenement / subdivided-flat blocks only. Inequity reduction is G_baseline − G_scenario at 15:00 HKT. lib/optimization/gini.ts.",
+  },
+  "hvac-mw": {
+    id: "hvac-mw",
+    name: "Grid peak HVAC strain",
+    identity: "P_MW = Σ_b (q_AC,b · A_roof,b) / 10^6    q_AC in W/m² at 15:00 HKT",
+    note: "q_AC is effectiveAcHeat (rejector waste heat after bylaw, cool roof, tenement efficiency grant, and grid failure). Not a Fiala term.",
+  },
 } as const;
 
 export type FormulaId = keyof typeof FORMULAS;

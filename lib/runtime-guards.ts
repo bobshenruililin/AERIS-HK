@@ -38,6 +38,11 @@ export function canUseMonteCarloWorker(): boolean {
   return isBrowser() && workerAvailable();
 }
 
+/** NSGA-II Pareto worker is plain JS — same Worker probe as Monte Carlo. */
+export function canUseParetoWorker(): boolean {
+  return isBrowser() && workerAvailable();
+}
+
 /**
  * True only when a real (non-software) WebGL2 context can clear and read back
  * a pixel. Software rasterizers and missing GL fail closed so Deck.gl / MapLibre

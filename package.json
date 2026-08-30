@@ -19,6 +19,7 @@
     "test:triage": "tsx --test scripts/hospital-triage.test.ts",
     "test:hardening": "tsx --test scripts/hardening.test.ts",
     "test:agent": "tsx --test scripts/agent.test.ts",
+    "test:pareto": "tsx --test scripts/pareto.test.ts",
     "typecheck": "tsc --noEmit",
     "db:seed": "node --env-file=.env.local --import tsx lib/db/seed.ts",
     "test:bio": "tsx --test scripts/biophysics.test.ts",
