@@ -33,7 +33,7 @@ export function LiveOpsToggle() {
     : null;
 
   return (
-    <div className="pointer-events-none absolute left-3 top-[4.85rem] z-30 flex max-w-[min(100%,22rem)] flex-col gap-1.5 md:left-4">
+    <div className="pointer-events-none absolute left-3 top-[9.5rem] z-30 flex max-w-[min(100%,22rem)] flex-col gap-1.5 md:left-4 md:top-[9.75rem]">
       <div
         className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-cyan-300/30 bg-slate-950/78 p-1 shadow-[0_0_36px_rgba(8,145,178,0.18)] backdrop-blur-2xl"
         data-testid="live-ops-toggle"
