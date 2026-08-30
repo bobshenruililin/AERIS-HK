@@ -1,0 +1,10 @@
+[project]
+name = "aeris-hk"
+version = "0.1.0"
+description = "Atmospheric & Epidemiological Risk Inference System — Hong Kong"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
