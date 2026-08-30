@@ -46,7 +46,7 @@ export interface HourIpcRow {
 }
 
 export function encodeFootprintsIpc(rows: FootprintIpcRow[]): Uint8Array {
-  return tableToIPC(tableFromJSON(rows), "file");
+  return tableToIPC(tableFromJSON(rows as unknown as Record<string, unknown>[]), "file");
 }
 
 export function decodeFootprintsIpc(bytes: Uint8Array | ArrayBuffer): FootprintIpcRow[] {
@@ -83,7 +83,7 @@ export function decodeFootprintsIpc(bytes: Uint8Array | ArrayBuffer): FootprintI
 }
 
 export function encodeHourlyIpc(rows: HourIpcRow[]): Uint8Array {
-  return tableToIPC(tableFromJSON(rows), "file");
+  return tableToIPC(tableFromJSON(rows as unknown as Record<string, unknown>[]), "file");
 }
 
 export function footprintsFromBuildings(buildings: BuildingFeature[]): FootprintIpcRow[] {
