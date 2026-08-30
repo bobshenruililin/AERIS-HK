@@ -41,7 +41,7 @@ export interface CameraBasis {
 }
 
 export function zoomToDistanceM(zoom: number): number {
-  return 420 * 2 ** (16.2 - zoom);
+  return 720 * 2 ** (16.2 - zoom);
 }
 
 export function wgs84ToEnu(lon: number, lat: number, up = 0, origin = TWIN_ORIGIN): EnuPoint {
@@ -64,10 +64,10 @@ export function viewFromMapState(view: {
   return {
     targetEast: target.east,
     targetNorth: target.north,
-    targetUp: 12,
+    targetUp: 18,
     distance: zoomToDistanceM(view.zoom),
     bearingDeg: view.bearing,
-    pitchDeg: view.pitch,
+    pitchDeg: Math.min(66, view.pitch + 4),
     fovDeg: 46,
   };
 }

@@ -9,17 +9,29 @@ const AERISMap = dynamic(() => import("./AERISMap"), {
   loading: () => null,
 });
 
-function probeWebGL(): boolean {
+/**
+ * Only promote Deck.gl when the caller asked (?gpu=1) *and* a real
+ * non-software WebGL2 context can clear and read back a pixel.
+ * Otherwise the Canvas2D ENU twin is the picture — MapLibre-without-extrusions
+ * is a flat Carto sheet that hides the city.
+ */
+function probeHealthyWebGL2(): boolean {
   if (typeof document === "undefined") return false;
   try {
     const canvas = document.createElement("canvas");
-    canvas.width = 8;
-    canvas.height = 8;
-    const gl =
-      canvas.getContext("webgl2", { failIfMajorPerformanceCaveat: true }) ??
-      canvas.getContext("webgl", { failIfMajorPerformanceCaveat: true });
-    if (!gl || gl.isContextLost()) return false;
-    return gl.drawingBufferWidth >= 8 && gl.drawingBufferHeight >= 8;
+    canvas.width = 32;
+    canvas.height = 32;
+    const gl = canvas.getContext("webgl2", {
+      failIfMajorPerformanceCaveat: true,
+      antialias: false,
+      preserveDrawingBuffer: true,
+    });
+    if (!gl || gl.isContextLost() || gl.drawingBufferWidth < 32) return false;
+    gl.clearColor(0.05, 0.82, 0.31, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const px = new Uint8Array(4);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    return px[1] > 160 && px[0] < 80;
   } catch {
     return false;
   }
@@ -28,7 +40,8 @@ function probeWebGL(): boolean {
 export function MapViewport() {
   const [gpu, setGpu] = useState(false);
   useEffect(() => {
-    setGpu(probeWebGL());
+    const asked = new URLSearchParams(window.location.search).get("gpu") === "1";
+    setGpu(asked && probeHealthyWebGL2());
   }, []);
 
   return (
@@ -38,11 +51,7 @@ export function MapViewport() {
         <div className="absolute inset-0" data-testid="gpu-twin">
           <AERISMap />
         </div>
-      ) : (
-        <div className="pointer-events-none absolute bottom-24 left-1/2 z-[5] -translate-x-1/2 rounded-full border border-cyan-300/20 bg-slate-950/50 px-3 py-1 font-mono text-[10px] text-cyan-100/80">
-          Software twin · GPU Deck.gl standby
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

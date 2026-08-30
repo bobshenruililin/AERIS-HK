@@ -384,10 +384,30 @@ function drawFrame(
         fillPoly(
           ctx,
           projected,
-          `rgba(253, 224, 71, ${0.72 + 0.2 * pulse})`,
-          "rgba(251,191,36,0.95)",
-          1.6 * dpr,
+          `rgba(253, 230, 120, ${0.82 + 0.15 * pulse})`,
+          "rgba(255, 220, 80, 1)",
+          2.2 * dpr,
         );
+        const roofMid = projectEnu(
+          {
+            east: face.pts.reduce((s, p) => s + p.east, 0) / face.pts.length,
+            north: face.pts.reduce((s, p) => s + p.north, 0) / face.pts.length,
+            up: roofUp + 3,
+          },
+          view,
+          w,
+          h,
+          basis,
+        );
+        if (roofMid.visible) {
+          const glow = ctx.createRadialGradient(roofMid.x, roofMid.y, 2 * dpr, roofMid.x, roofMid.y, 28 * dpr);
+          glow.addColorStop(0, `rgba(253, 224, 71, ${0.55 * pulse})`);
+          glow.addColorStop(1, "rgba(253, 224, 71, 0)");
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(roofMid.x, roofMid.y, 28 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (face.roof && greedyGhost) {
         const [r, g, b] = shadeRgb(color, face.normal, sun, ambient);
         fillPoly(ctx, projected, `rgba(${r},${g},${b},0.88)`, "rgba(226,232,240,0.7)", 1.2 * dpr);
@@ -395,6 +415,17 @@ function drawFrame(
         const [r, g, b] = shadeRgb(color, face.normal, sun, ambient);
         const edge = highlight ? "rgba(34,211,238,0.95)" : gold ? "rgba(251,191,36,0.7)" : "rgba(15,23,42,0.55)";
         fillPoly(ctx, projected, `rgba(${r},${g},${b},${face.roof ? 0.96 : 0.9})`, edge, highlight ? 2.2 * dpr : 1);
+        if (!day && !face.roof && projected.length >= 4) {
+          ctx.fillStyle = "rgba(255, 214, 130, 0.42)";
+          for (let k = 1; k <= 4; k += 1) {
+            const t = k / 5;
+            const x1 = projected[0].x * (1 - t) + projected[3].x * t;
+            const y1 = projected[0].y * (1 - t) + projected[3].y * t;
+            const x2 = projected[1].x * (1 - t) + projected[2].x * t;
+            const y2 = projected[1].y * (1 - t) + projected[2].y * t;
+            ctx.fillRect((x1 + x2) / 2 - dpr, (y1 + y2) / 2 - dpr, 2.2 * dpr, 1.4 * dpr);
+          }
+        }
       }
     }
     const roofPick = projectEnu({ ...mesh.centroid, up: roofUp }, view, w, h, basis);
