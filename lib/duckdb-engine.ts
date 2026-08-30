@@ -11,23 +11,11 @@ import type {
 } from "./types";
 import { classifyCvi } from "./epidemiology-engine";
 import { CVI_MODERATE_MAX } from "./constants";
+import { encodeHourlyIpc, hourlyRowsFromState, type HourIpcRow } from "./arrow-ipc";
 
 type DuckDbModule = typeof import("@duckdb/duckdb-wasm");
 type AsyncDuckDB = import("@duckdb/duckdb-wasm").AsyncDuckDB;
 type AsyncDuckDBConnection = import("@duckdb/duckdb-wasm").AsyncDuckDBConnection;
-
-interface HourRow {
-  building_id: string;
-  name_en: string;
-  name_zh: string;
-  district: DistrictName;
-  hour: number;
-  cvi: number;
-  micro_wbgt: number;
-  indoor_ta: number;
-  outdoor_ta: number;
-  residents: number;
-}
 
 let duckdbMod: DuckDbModule | null = null;
 let dbSingleton: AsyncDuckDB | null = null;
@@ -68,32 +56,7 @@ async function instantiateDuckDb(): Promise<AsyncDuckDB | null> {
   return initPromise;
 }
 
-function toRows(
-  buildings: BuildingFeature[],
-  hourly: BuildingHourState[],
-): HourRow[] {
-  const meta = new Map(buildings.map((b) => [b.properties.id, b.properties]));
-  return hourly.map((row) => {
-    const props = meta.get(row.buildingId);
-    if (!props) {
-      throw new Error(`Hourly row missing building ${row.buildingId}`);
-    }
-    return {
-      building_id: row.buildingId,
-      name_en: props.nameEn,
-      name_zh: props.nameZh,
-      district: props.district,
-      hour: Math.round(row.hour),
-      cvi: row.cvi,
-      micro_wbgt: row.microWbgt,
-      indoor_ta: row.indoorTa,
-      outdoor_ta: row.outdoorTa,
-      residents: props.estimatedResidents,
-    };
-  });
-}
-
-function fallbackDistrictHourly(rows: HourRow[]): DistrictHourAggregate[] {
+function fallbackDistrictHourly(rows: HourIpcRow[]): DistrictHourAggregate[] {
   const buckets = new Map<string, DistrictHourAggregate & { cviSum: number; wbgtSum: number; taSum: number }>();
   for (const row of rows) {
     const key = `${row.district}:${row.hour}`;
@@ -126,7 +89,7 @@ function fallbackDistrictHourly(rows: HourRow[]): DistrictHourAggregate[] {
     .sort((a, b) => a.district.localeCompare(b.district) || a.hour - b.hour);
 }
 
-function fallbackTopCritical(rows: HourRow[], hour: number, limit = 10): CriticalBuildingRow[] {
+function fallbackTopCritical(rows: HourIpcRow[], hour: number, limit = 10): CriticalBuildingRow[] {
   const h = Math.round(hour) % 24;
   return rows
     .filter((r) => r.hour === h && r.cvi >= CVI_MODERATE_MAX)
@@ -145,36 +108,91 @@ function fallbackTopCritical(rows: HourRow[], hour: number, limit = 10): Critica
     }));
 }
 
+function emptyBundle(
+  rows: HourIpcRow[],
+  hour: number,
+  started: number,
+  engine: DuckDbQueryBundle["engine"],
+): DuckDbQueryBundle {
+  return {
+    districtHourly: fallbackDistrictHourly(rows),
+    topCritical: fallbackTopCritical(rows, hour),
+    queryLatencyMs: performance.now() - started,
+    engine,
+    footprintsLoaded: false,
+    footprintCount: 0,
+    arrowIpc: false,
+  };
+}
+
+async function ingestIpcTable(
+  db: AsyncDuckDB,
+  conn: AsyncDuckDBConnection,
+  name: string,
+  fileName: string,
+  ipc: Uint8Array,
+): Promise<void> {
+  await conn.query(`DROP TABLE IF EXISTS ${name}`);
+  try {
+    const { tableFromIPC } = await import("apache-arrow");
+    await conn.insertArrowTable(tableFromIPC(ipc), { name, create: true });
+    return;
+  } catch (error) {
+    console.warn(`[AERIS-HK] insertArrowTable(${name}) failed; trying read_ipc.`, error);
+  }
+  try {
+    await db.dropFile(fileName);
+  } catch {
+    // First ingest has no prior Arrow file handle.
+  }
+  await db.registerFileBuffer(fileName, ipc);
+  await conn.query(`CREATE TABLE ${name} AS SELECT * FROM read_ipc('${fileName}')`);
+}
+
+async function countRows(conn: AsyncDuckDBConnection, table: string): Promise<number> {
+  const result = await conn.query(`SELECT COUNT(*)::INTEGER AS n FROM ${table}`);
+  const rec = result.toArray()[0];
+  if (!rec) return 0;
+  const row = rec.toJSON() as Record<string, unknown>;
+  return Number(row.n ?? 0);
+}
+
 async function queryDuckDb(
   conn: AsyncDuckDBConnection,
   hour: number,
-): Promise<Omit<DuckDbQueryBundle, "queryLatencyMs" | "engine">> {
+  useFootprints: boolean,
+): Promise<Omit<DuckDbQueryBundle, "queryLatencyMs" | "engine" | "arrowIpc">> {
+  const fromClause = useFootprints
+    ? `building_hours h INNER JOIN footprints f ON CAST(f.id AS VARCHAR) = CAST(h.building_id AS VARCHAR)`
+    : `building_hours h`;
+  const districtExpr = useFootprints ? "CAST(f.district AS VARCHAR)" : "h.district";
+
   const district = await conn.query(`
     SELECT
-      district,
-      hour,
-      AVG(cvi)::DOUBLE AS mean_cvi,
-      AVG(micro_wbgt)::DOUBLE AS mean_wbgt,
-      AVG(indoor_ta)::DOUBLE AS mean_indoor_ta,
+      ${districtExpr} AS district,
+      h.hour,
+      AVG(h.cvi)::DOUBLE AS mean_cvi,
+      AVG(h.micro_wbgt)::DOUBLE AS mean_wbgt,
+      AVG(h.indoor_ta)::DOUBLE AS mean_indoor_ta,
       COUNT(*)::INTEGER AS building_count
-    FROM building_hours
-    GROUP BY district, hour
-    ORDER BY district, hour
+    FROM ${fromClause}
+    GROUP BY 1, 2
+    ORDER BY 1, 2
   `);
   const critical = await conn.query(`
     SELECT
-      building_id,
-      name_en,
-      name_zh,
-      district,
-      hour,
-      cvi,
-      micro_wbgt,
-      indoor_ta
-    FROM building_hours
-    WHERE hour = ${Math.round(hour) % 24}
-      AND cvi >= ${CVI_MODERATE_MAX}
-    ORDER BY cvi DESC
+      h.building_id,
+      h.name_en,
+      h.name_zh,
+      ${districtExpr} AS district,
+      h.hour,
+      h.cvi,
+      h.micro_wbgt,
+      h.indoor_ta
+    FROM ${fromClause}
+    WHERE h.hour = ${Math.round(hour) % 24}
+      AND h.cvi >= ${CVI_MODERATE_MAX}
+    ORDER BY h.cvi DESC
     LIMIT 10
   `);
 
@@ -208,7 +226,13 @@ async function queryDuckDb(
     });
   }
 
-  return { districtHourly, topCritical };
+  const footprintCount = useFootprints ? await countRows(conn, "footprints") : 0;
+  return {
+    districtHourly,
+    topCritical,
+    footprintsLoaded: useFootprints && footprintCount > 0,
+    footprintCount,
+  };
 }
 
 export async function runAerisAnalytics(args: {
@@ -216,46 +240,43 @@ export async function runAerisAnalytics(args: {
   hourly: BuildingHourState[];
   hour: number;
   policy: PolicyState;
+  footprintsIpc?: Uint8Array | null;
 }): Promise<DuckDbQueryBundle> {
   const started = performance.now();
-  const rows = toRows(args.buildings, args.hourly);
+  const rows = hourlyRowsFromState(args.buildings, args.hourly);
   const db = await instantiateDuckDb();
 
   if (!db) {
-    return {
-      districtHourly: fallbackDistrictHourly(rows),
-      topCritical: fallbackTopCritical(rows, args.hour),
-      queryLatencyMs: performance.now() - started,
-      engine: "columnar-fallback",
-    };
+    return emptyBundle(rows, args.hour, started, "columnar-fallback");
   }
 
   const conn = await db.connect();
   try {
-    await conn.query("DROP TABLE IF EXISTS building_hours");
-    try {
-      await db.dropFile("building_hours.json");
-    } catch {
-      // First ingest has no prior Arrow/JSON file handle.
+    const hoursIpc = encodeHourlyIpc(rows);
+    await ingestIpcTable(db, conn, "building_hours", "building_hours.arrow", hoursIpc);
+
+    let useFootprints = false;
+    if (args.footprintsIpc && args.footprintsIpc.byteLength > 0) {
+      await ingestIpcTable(db, conn, "footprints", "footprints.arrow", args.footprintsIpc);
+      const joined = await conn.query(`
+        SELECT COUNT(*)::INTEGER AS n
+        FROM building_hours h
+        INNER JOIN footprints f ON CAST(f.id AS VARCHAR) = CAST(h.building_id AS VARCHAR)
+      `);
+      const rec = joined.toArray()[0]?.toJSON() as Record<string, unknown> | undefined;
+      useFootprints = Number(rec?.n ?? 0) > 0;
     }
-    await db.registerFileText("building_hours.json", JSON.stringify(rows));
-    await conn.query(
-      `CREATE OR REPLACE TABLE building_hours AS SELECT * FROM read_json_auto('building_hours.json')`,
-    );
-    const queried = await queryDuckDb(conn, args.hour);
+
+    const queried = await queryDuckDb(conn, args.hour, useFootprints);
     return {
       ...queried,
       queryLatencyMs: performance.now() - started,
       engine: "duckdb-wasm",
+      arrowIpc: true,
     };
   } catch (error) {
-    console.warn("[AERIS-HK] DuckDB query failed; using columnar fallback.", error);
-    return {
-      districtHourly: fallbackDistrictHourly(rows),
-      topCritical: fallbackTopCritical(rows, args.hour),
-      queryLatencyMs: performance.now() - started,
-      engine: "columnar-fallback",
-    };
+    console.warn("[AERIS-HK] DuckDB Arrow IPC query failed; using columnar fallback.", error);
+    return emptyBundle(rows, args.hour, started, "columnar-fallback");
   } finally {
     await conn.close();
   }

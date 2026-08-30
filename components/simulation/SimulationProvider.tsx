@@ -18,10 +18,13 @@ import type {
   PlaybackSpeed,
   PolicyImpact,
   PolicyState,
+  SpatialBuildingsPayload,
+  SpatialSnapshotMeta,
   SystemHourSnapshot,
 } from "@/lib/types";
 import { DEFAULT_POLICY } from "@/lib/types";
 import { getBuildings } from "@/lib/spatial-data";
+import { SYNTHETIC_SPATIAL_META } from "@/lib/spatial-source";
 import {
   computePolicyImpact,
   evaluateSystemAtHour,
@@ -51,9 +54,14 @@ interface SimulationContextValue {
   cache: Map<string, BuildingHourState>;
   envelope: HkoDiurnalEnvelope | null;
   envelopeError: string | null;
+  spatial: SpatialSnapshotMeta;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
+
+function seedSpatialMeta(count: number): SpatialSnapshotMeta {
+  return { ...SYNTHETIC_SPATIAL_META, buildingCount: count };
+}
 
 async function fetchHkoEnvelope(): Promise<HkoDiurnalEnvelope> {
   const res = await fetch("/api/hko/envelope", { cache: "no-store" });
@@ -63,8 +71,37 @@ async function fetchHkoEnvelope(): Promise<HkoDiurnalEnvelope> {
   return (await res.json()) as HkoDiurnalEnvelope;
 }
 
+async function fetchSpatialBuildings(): Promise<SpatialBuildingsPayload> {
+  const res = await fetch("/api/spatial/buildings", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Spatial buildings HTTP ${res.status}`);
+  }
+  return (await res.json()) as SpatialBuildingsPayload;
+}
+
+async function fetchFootprintsIpc(): Promise<{ bytes: Uint8Array; meta: Partial<SpatialSnapshotMeta> }> {
+  const res = await fetch("/api/spatial/footprints", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Spatial Arrow IPC HTTP ${res.status}`);
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return {
+    bytes,
+    meta: {
+      authority: (res.headers.get("X-AERIS-Authority") as SpatialSnapshotMeta["authority"]) ?? undefined,
+      dualWrite: res.headers.get("X-AERIS-Dual-Write") === "true",
+      buildingCount: Number(res.headers.get("X-AERIS-Building-Count") ?? bytes.byteLength),
+      arrowBytes: bytes.byteLength,
+    },
+  };
+}
+
 export function SimulationProvider({ children }: { children: ReactNode }) {
-  const buildings = useMemo(() => getBuildings(), []);
+  const seed = useMemo(() => getBuildings(), []);
+  const [buildings, setBuildings] = useState<BuildingFeature[]>(seed);
+  const [spatial, setSpatial] = useState<SpatialSnapshotMeta>(() => seedSpatialMeta(seed.length));
+  const footprintsIpcRef = useRef<Uint8Array | null>(null);
+  const [footprintsEpoch, setFootprintsEpoch] = useState(0);
   const [hour, setHourState] = useState(15);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
@@ -103,6 +140,40 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [payload, arrow] = await Promise.all([fetchSpatialBuildings(), fetchFootprintsIpc()]);
+        if (cancelled) return;
+        if (payload.collection.features.length >= 50) {
+          setBuildings(payload.collection.features);
+        }
+        footprintsIpcRef.current = arrow.bytes;
+        setSpatial({
+          authority: payload.authority,
+          sourceSrid: 2326,
+          displaySrid: 4326,
+          dualWrite: payload.dualWrite,
+          buildingCount: payload.collection.features.length,
+          arrowBytes: arrow.bytes.byteLength,
+          postgisVersion: payload.postgisVersion,
+        });
+        setFootprintsEpoch((n) => n + 1);
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setSpatial((prev) => ({
+            ...prev,
+            error: error instanceof Error ? error.message : "PostGIS snapshot failed",
+          }));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const cache = useMemo(
     () => precomputeHourlyCache(policy, buildings, envelope),
     [policy, buildings, envelope],
@@ -126,13 +197,14 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       hourly: hourlyFlat,
       hour: queryHour,
       policy,
+      footprintsIpc: footprintsIpcRef.current,
     }).then((bundle) => {
       if (!cancelled) setAnalytics(bundle);
     });
     return () => {
       cancelled = true;
     };
-  }, [buildings, hourlyFlat, queryHour, policy]);
+  }, [buildings, hourlyFlat, queryHour, policy, footprintsEpoch]);
 
   useEffect(() => {
     if (!playing) return undefined;
@@ -186,6 +258,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       cache,
       envelope,
       envelopeError,
+      spatial,
     }),
     [
       buildings,
@@ -204,6 +277,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       cache,
       envelope,
       envelopeError,
+      spatial,
     ],
   );
 

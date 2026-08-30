@@ -23,9 +23,14 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Client remains DuckDB-WASM + Deck.gl; meteorology arrives as JSON from the Route Handler
 - [x] Official WHOT drives the HUD badge; canyon WBGT remains an AERIS overlay
 
-### `/goal` PostGIS HK80 synchronization
+### `/goal` PostGIS HK80 synchronization (complete)
 
-Stand up PostGIS (`EPSG:2326`) for authoritative footprints. Publish Arrow IPC snapshots to the client DuckDB engine. Dual-write WGS84 for Deck.gl. Add a `scripts/ingest-hk80.sql` migration and CRS round-trip tests.
+- [x] PostGIS `aeris.buildings.geom_hk80` (EPSG:2326) as the authoritative footprint store
+- [x] Dual-write `geom_wgs84` (EPSG:4326) via `ST_Transform` trigger for Deck.gl
+- [x] Arrow IPC snapshot `GET /api/spatial/footprints` loaded by client DuckDB-WASM
+- [x] GeoJSON 4326 `GET /api/spatial/buildings` for the map
+- [x] `scripts/ingest-hk80.sql` migration + `npm run ingest:hk80`
+- [x] CRS round-trip tests (`npm run test:crs`) for JS Helmert/TM and PostGIS `ST_Transform`
 
 ### `/goal` HA CMS / A&E anonymised nowcast
 

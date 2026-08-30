@@ -11,7 +11,7 @@ import { solarElevationDeg } from "@/lib/solar";
 import { ExportReport } from "@/components/ui/ExportReport";
 
 export function Header() {
-  const { snapshot, analytics, hour, envelope, envelopeError } = useSimulation();
+  const { snapshot, analytics, hour, envelope, envelopeError, spatial } = useSimulation();
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const elev = solarElevationDeg(hour);
   const bedPct = snapshot.clusterBedStress * 100;
@@ -45,8 +45,14 @@ export function Header() {
     `Kowloon West + overflow bed stress ${bedPct.toFixed(1)}%`,
     `Cluster CVI ${snapshot.regionalMeanCvi.toFixed(1)}`,
     analytics
-      ? `${analytics.engine} query ${analytics.queryLatencyMs.toFixed(2)} ms`
+      ? `${analytics.engine}${analytics.arrowIpc ? " Arrow IPC" : ""} query ${analytics.queryLatencyMs.toFixed(2)} ms`
       : "Columnar engine warming",
+    spatial.authority === "postgis-hk80"
+      ? `PostGIS HK80 EPSG:2326 · dual-write EPSG:4326 · ${spatial.buildingCount} footprints${spatial.arrowBytes ? ` · ${spatial.arrowBytes} B IPC` : ""}`
+      : `Synthetic HK80 seed · ${spatial.buildingCount} footprints${spatial.error ? ` · ${spatial.error}` : ""}`,
+    analytics?.footprintsLoaded
+      ? `DuckDB footprints JOIN ${analytics.footprintCount}`
+      : "DuckDB footprints pending",
     `Solar elevation ${elev.toFixed(1)}° · ${formatHourLabel(hour)} HKT`,
   ];
 

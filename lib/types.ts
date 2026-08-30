@@ -60,6 +60,28 @@ export interface BuildingFeatureCollection {
   features: BuildingFeature[];
 }
 
+export type SpatialAuthority = "postgis-hk80" | "synthetic-seed";
+
+export interface SpatialSnapshotMeta {
+  authority: SpatialAuthority;
+  sourceSrid: 2326;
+  displaySrid: 4326;
+  dualWrite: boolean;
+  buildingCount: number;
+  arrowBytes: number;
+  postgisVersion?: string;
+  error?: string;
+}
+
+export interface SpatialBuildingsPayload {
+  authority: SpatialAuthority;
+  sourceSrid: 2326;
+  displaySrid: 4326;
+  dualWrite: boolean;
+  postgisVersion?: string;
+  collection: BuildingFeatureCollection;
+}
+
 export interface PolicyState {
   coolingShelters: number;
   dhcOutreach: number;
@@ -174,6 +196,9 @@ export interface DuckDbQueryBundle {
   topCritical: CriticalBuildingRow[];
   queryLatencyMs: number;
   engine: "duckdb-wasm" | "columnar-fallback";
+  footprintsLoaded: boolean;
+  footprintCount: number;
+  arrowIpc: boolean;
 }
 
 export const BASELINE_POLICY: PolicyState = {

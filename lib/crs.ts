@@ -260,3 +260,45 @@ export function metersPerDegree(latDeg: number): { metersPerDegLat: number; mete
     Math.sqrt(1 - WGS84_E2 * Math.sin(lat) * Math.sin(lat));
   return { metersPerDegLat, metersPerDegLng };
 }
+
+export function geodesicDistanceMeters(a: Wgs84Point, b: Wgs84Point): number {
+  const { metersPerDegLat, metersPerDegLng } = metersPerDegree((a.lat + b.lat) / 2);
+  return Math.hypot((b.lon - a.lon) * metersPerDegLng, (b.lat - a.lat) * metersPerDegLat);
+}
+
+export function crsRoundTripErrorMeters(lon: number, lat: number): number {
+  assertWgs84(lon, lat);
+  const hk = wgs84ToHk80(lon, lat);
+  const back = hk80ToWgs84(hk.easting, hk.northing);
+  return geodesicDistanceMeters({ lon, lat }, back);
+}
+
+export function closeLonLatRing(ring: Array<[number, number]>): Array<[number, number]> {
+  if (ring.length < 3) {
+    throw new Error("Polygon ring requires at least 3 vertices");
+  }
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] === last[0] && first[1] === last[1]) return ring;
+  return [...ring, [first[0], first[1]]];
+}
+
+/** WKT POLYGON in EPSG:2326 metres from a WGS84 lon/lat ring. */
+export function wgs84RingToHk80Wkt(ring: Array<[number, number]>): string {
+  const closed = closeLonLatRing(ring);
+  const parts = closed.map(([lon, lat]) => {
+    assertWgs84(lon, lat);
+    const hk = wgs84ToHk80(lon, lat);
+    return `${hk.easting.toFixed(4)} ${hk.northing.toFixed(4)}`;
+  });
+  return `POLYGON((${parts.join(", ")}))`;
+}
+
+export function lonLatRingToWgs84Wkt(ring: Array<[number, number]>): string {
+  const closed = closeLonLatRing(ring);
+  const parts = closed.map(([lon, lat]) => {
+    assertWgs84(lon, lat);
+    return `${lon.toFixed(8)} ${lat.toFixed(8)}`;
+  });
+  return `POLYGON((${parts.join(", ")}))`;
+}

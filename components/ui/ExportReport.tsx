@@ -1,18 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileText, Printer, X } from "lucide-react";
 import { AERIS_FULL_TITLE, HEAT_EPISODE_LABEL } from "@/lib/constants";
 import { hkoStatusLabel } from "@/lib/epidemiology-engine";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
-import { getBuildings } from "@/lib/spatial-data";
 
 export function ExportReport() {
-  const { snapshot, impact, policy, hour, analytics, envelope } = useSimulation();
+  const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial } = useSimulation();
   const [open, setOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
-  const buildings = useMemo(() => getBuildings(), []);
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const [generatedAt, setGeneratedAt] = useState(() => new Date().toISOString());
 
@@ -192,14 +190,18 @@ export function ExportReport() {
                 Micro-WBGT from Gagge 2-node balance S = M − W − E − R − C, canyon air with AC rejector load, and a
                 six-hour thermal-inertia lag scaled by subdivided density. CVI(t) = 0.35·WBGT/35 + 0.28·density +
                 0.22·elderly + 0.15·blockage, indexed 0–100. ED demand uses M/M/c queues. Analytics engine:{" "}
-                {analytics?.engine ?? "pending"} ({analytics ? `${analytics.queryLatencyMs.toFixed(2)} ms` : "n/a"}).
-                Geometry stored as WGS84 (EPSG:4326) with HK80 (EPSG:2326) easting/northing on every footprint.
-                Meteorological forcing is a rolling 24-hour HKO envelope (observed AWS + 9-day FND anchors) ingested
-                server-side from data.weather.gov.hk via /api/hko/envelope and /api/hko/ingest.
+                {analytics?.engine ?? "pending"} ({analytics ? `${analytics.queryLatencyMs.toFixed(2)} ms` : "n/a"}
+                {analytics?.arrowIpc ? ", Arrow IPC" : ""}).
+                Authoritative footprints live in PostGIS as HK80 (EPSG:2326) with dual-write WGS84 (EPSG:4326)
+                for Deck.gl ({spatial.authority}, {spatial.buildingCount} buildings
+                {spatial.dualWrite ? ", dual-write on" : ""}). Meteorological forcing is a rolling 24-hour HKO
+                envelope (observed AWS + 9-day FND anchors) ingested server-side from data.weather.gov.hk via
+                /api/hko/envelope and /api/hko/ingest.
               </p>
               <p className="meta">
-                Disclaimer: Synthetic tong lau morphology with live HKO Open Data meteorological forcing
-                (rhrread, 1-minute AWS CSV, warnsum WHOT, 9-day FND). Not an official HKO or HA product.
+                Disclaimer: Synthetic tong lau morphology stored in PostGIS as HK80 (EPSG:2326) with dual-write
+                WGS84 for mapping, plus live HKO Open Data meteorological forcing (rhrread, 1-minute AWS CSV,
+                warnsum WHOT, 9-day FND). Not an official HKO or HA product.
               </p>
             </div>
           </div>

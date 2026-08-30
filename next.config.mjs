@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    serverComponentsExternalPackages: ["pg"],
+  },
   transpilePackages: [
     "@deck.gl/core",
     "@deck.gl/react",
@@ -23,12 +26,6 @@ const nextConfig = {
       asyncWebAssembly: true,
       layers: true,
     };
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      path: false,
-      crypto: false,
-    };
     config.module.rules.push({
       test: /\.wasm$/,
       type: "asset/resource",
@@ -38,6 +35,18 @@ const nextConfig = {
         ...(Array.isArray(config.externals) ? config.externals : []),
         { "@duckdb/duckdb-wasm": "commonjs @duckdb/duckdb-wasm" },
       ];
+    } else {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        pg: false,
+        "pg-native": false,
+      };
     }
     return config;
   },

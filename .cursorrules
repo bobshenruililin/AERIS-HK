@@ -14,11 +14,12 @@ When given a `/goal` (or any multi-step mission):
 
 ## Spatial CRS safety (EPSG:2326 ↔ EPSG:4326)
 
-- **Store and compute** Hong Kong Grid as HK80 metres (EPSG:2326) on `building.properties.hk80`.
-- **Render** only WGS84 lon/lat (EPSG:4326) in Deck.gl / MapLibre. Never pass eastings to `getPosition`.
-- Convert exclusively through `lib/crs.ts` (International 1924 TM + Helmert TOWGS84). Do not invent linear offsets.
+- **Store and compute** Hong Kong Grid as HK80 metres (EPSG:2326) on `building.properties.hk80` and PostGIS `aeris.buildings.geom_hk80`.
+- **Render** only WGS84 lon/lat (EPSG:4326) in Deck.gl / MapLibre. Never pass eastings to `getPosition`. Dual-write `geom_wgs84` exists solely for the map client.
+- Convert exclusively through `lib/crs.ts` (International 1924 TM + Helmert TOWGS84) or PostGIS `ST_Transform`. Do not invent linear offsets.
 - Call `assertWgs84` for any new Kowloon coordinate. Reject geometry outside the Hong Kong envelope.
-- DuckDB tables may store both CRS representations; map layers consume 4326 only.
+- DuckDB tables may store both CRS representations via Arrow IPC snapshots; map layers consume 4326 only.
+- Never import `lib/postgis/*` or `pg` from `"use client"` modules. Spatial APIs are Node Route Handlers.
 
 ## WebGL / WASM SSR hydration defense
 

@@ -2,6 +2,19 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.3.0] — 2026-08-30
+
+### Added
+
+- PostGIS HK80 (EPSG:2326) authority store `aeris.buildings` with dual-write WGS84 (EPSG:4326) for Deck.gl.
+- Arrow IPC footprint snapshots at `GET /api/spatial/footprints` ingested by DuckDB-WASM (`insertArrowTable` / `read_ipc`).
+- GeoJSON 4326 at `GET /api/spatial/buildings` and `POST /api/spatial/ingest`.
+- `scripts/ingest-hk80.sql` migration, `npm run ingest:hk80`, and `npm run test:crs` round-trip suite.
+
+### Changed
+
+- Client analytics join hourly CVI to PostGIS footprints over Arrow IPC instead of JSON-only ingest.
+
 ## [0.2.0] — 2026-08-30
 
 ### Added
