@@ -14,7 +14,6 @@
 
 import {
   applySubdividedFlatThermalLag,
-  BATTERY_CHARGE_HOUR,
   CONCRETE_THERMAL_BATTERY_TAU_H,
 } from "../biophysics";
 import { metersPerDegree } from "../crs";
