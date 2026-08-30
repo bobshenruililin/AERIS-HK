@@ -9,7 +9,6 @@ import {
   LightingEffect,
 } from "@deck.gl/core";
 import { ArcLayer, ColumnLayer, GeoJsonLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
-import { H3HexagonLayer } from "@deck.gl/geo-layers";
 import type { MapViewState, PickingInfo } from "@deck.gl/core";
 import { Map as MapLibreMap } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -83,14 +82,6 @@ export default function AERISMap() {
   const userMoved = useRef(false);
 
   const targeted = useMemo(() => new Set(policy.coolRoofTargetIds), [policy.coolRoofTargetIds]);
-
-  const cviById = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const row of snapshot.buildings) {
-      map.set(row.buildingId, row.cvi);
-    }
-    return map;
-  }, [snapshot.buildings]);
 
   const centroidById = useMemo(() => {
     const map = new Map<string, [number, number]>();
@@ -232,17 +223,37 @@ export default function AERISMap() {
         capRounded: true,
         jointRounded: true,
       }),
-      new H3HexagonLayer({
+      new GeoJsonLayer({
         id: "h3-microclimate",
-        data: hexes,
+        data: {
+          type: "FeatureCollection",
+          features: hexes.map((cell) => ({
+            type: "Feature" as const,
+            properties: cell,
+            geometry: {
+              type: "Polygon" as const,
+              coordinates: [
+                (() => {
+                  const ring = cell.boundary;
+                  if (ring.length === 0) return ring;
+                  const [fx, fy] = ring[0];
+                  const [lx, ly] = ring[ring.length - 1];
+                  return fx === lx && fy === ly ? ring : [...ring, ring[0]];
+                })(),
+              ],
+            },
+          })),
+        },
         extruded: true,
-        coverage: 0.92,
         pickable: false,
         opacity: 0.55,
-        getHexagon: (d) => d.hex,
-        getFillColor: (d) => [d.color[0], d.color[1], d.color[2], 110],
-        getElevation: (d) => d.elevation,
-        elevationScale: 1,
+        getFillColor: (f: { properties: { color: [number, number, number, number] } }) => [
+          f.properties.color[0],
+          f.properties.color[1],
+          f.properties.color[2],
+          110,
+        ],
+        getElevation: (f: { properties: { elevation: number } }) => f.properties.elevation,
         visible: hudLayers.h3Hexes,
         updateTriggers: {
           getFillColor: hourFloor,
@@ -369,8 +380,6 @@ export default function AERISMap() {
     hourFloor,
     hexes,
     shimmerExtension,
-    cviById,
-    snapshot.hour,
     hour,
     hoveredId,
     selectedId,

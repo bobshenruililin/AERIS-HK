@@ -47,17 +47,6 @@ function satVaporKpa(tempC: number): number {
   return 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
 }
 
-function stullWetBulb(ta: number, rhFrac: number): number {
-  const rh = clamp(rhFrac * 100, 5, 99);
-  return (
-    ta * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) +
-    Math.atan(ta + rh) -
-    Math.atan(rh - 1.676331) +
-    0.00391838 * rh ** 1.5 * Math.atan(0.023101 * rh) -
-    4.686035
-  );
-}
-
 function relativeHumidity(
   hour: number,
   envelope: HkoDiurnalEnvelope | null,
@@ -264,14 +253,6 @@ export function gaggeTwoNode(
     coreTempC: Tcr,
     airVelocityMs: vAir,
   };
-}
-
-function wbgtOutdoor(ta: number, tw: number, tg: number): number {
-  return 0.7 * tw + 0.2 * tg + 0.1 * ta;
-}
-
-function wbgtIndoor(ta: number, tw: number, tg: number): number {
-  return 0.7 * tw + 0.3 * tg;
 }
 
 export function classifyCvi(cvi: number): CviRiskTier {
