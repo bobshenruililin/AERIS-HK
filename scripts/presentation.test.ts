@@ -6,6 +6,7 @@ import {
   BRIEFING_BEAT_COUNT,
   BRIEFING_BEATS,
   briefingBeat,
+  lerpHourCinematic,
   lerpHourForward,
   pickFukWaTrapBuilding,
 } from "../lib/presentation/beats";
@@ -48,6 +49,9 @@ describe("cinematic briefing beats", () => {
     const mid = lerpHourForward(23, 2, 0.5);
     assert.ok(mid < 1 || mid > 22, `forward wrap mid=${mid}`);
     assert.ok(Math.abs(lerpHourForward(14, 14, 0.4) - 14) < 1e-9);
+    assert.ok(Math.abs(lerpHourCinematic(15, 14, 1) - 14) < 1e-9);
+    const midBack = lerpHourCinematic(15, 14, 0.5);
+    assert.ok(midBack > 13.4 && midBack < 14.6, `short backstep mid=${midBack}`);
   });
 
   it("picks a Fuk Wa Street 劏房 trap with high subdivided density", () => {

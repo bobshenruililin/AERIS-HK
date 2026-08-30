@@ -111,6 +111,20 @@ export function lerpHourForward(from: number, to: number, t: number): number {
   return wrapHour(a + (b - a) * t);
 }
 
+/**
+ * Cinematic hour lerp: midnight-forward for story jumps, but take a short
+ * backward step when the target is ≤6 h earlier (e.g. 15:00 → 14:00).
+ */
+export function lerpHourCinematic(from: number, to: number, t: number): number {
+  const a = wrapHour(from);
+  const b = wrapHour(to);
+  let forward = b - a;
+  if (forward < 0) forward += 24;
+  const back = forward - 24;
+  const delta = Math.abs(back) > 0 && Math.abs(back) <= 6 ? back : forward;
+  return wrapHour(a + delta * t);
+}
+
 export type BriefingBeatEventDetail = {
   source: "key" | "ui" | "auto";
   index?: number;

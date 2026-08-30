@@ -472,7 +472,7 @@ export function paintA4Png(
   );
 }
 
-export async function buildA4Png(model: A4BriefingModel, mapDataUrl: string | null): Promise<Uint8Array> {
+export function rasterizeA4Png(model: A4BriefingModel, mapSource: CanvasImageSource | null): Uint8Array {
   if (typeof document === "undefined") {
     throw new Error("A4 PNG export requires a document canvas");
   }
@@ -481,16 +481,20 @@ export async function buildA4Png(model: A4BriefingModel, mapDataUrl: string | nu
   canvas.height = A4_PNG_PX.h;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2D context unavailable");
-  let mapImage: HTMLImageElement | null = null;
-  if (mapDataUrl) {
-    mapImage = new Image();
-    mapImage.src = mapDataUrl;
-    await mapImage.decode();
-  }
-  paintA4Png(ctx, model, mapImage);
+  paintA4Png(ctx, model, mapSource);
   const dataUrl = canvas.toDataURL("image/png");
   const bin = atob(dataUrl.split(",")[1] ?? "");
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+export async function buildA4Png(model: A4BriefingModel, mapDataUrl: string | null): Promise<Uint8Array> {
+  let mapImage: HTMLImageElement | null = null;
+  if (mapDataUrl && typeof Image !== "undefined") {
+    mapImage = new Image();
+    mapImage.src = mapDataUrl;
+    await mapImage.decode();
+  }
+  return rasterizeA4Png(model, mapImage);
 }

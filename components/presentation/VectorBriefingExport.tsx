@@ -5,10 +5,10 @@ import { FileDown } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import {
   buildA4Pdf,
-  buildA4Png,
   downloadBytes,
   jpegFromDataUrl,
   modelFromTwin,
+  rasterizeA4Png,
 } from "@/lib/presentation/a4-brief";
 import type { BriefingBeat } from "@/lib/presentation/beats";
 import { runMonteCarlo } from "@/lib/monte-carlo";
@@ -30,10 +30,11 @@ export function VectorBriefingExport({ beat }: { beat: BriefingBeat }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("A4 PDF + PNG · map · Monte Carlo 95% CI · HA breakdown");
 
-  const exportSheet = async () => {
+  const exportSheet = () => {
     setBusy(true);
     try {
-      const mapDataUrl = captureTwinJpeg();
+      const canvas = document.querySelector<HTMLCanvasElement>("[data-testid=twin-canvas]");
+      const mapDataUrl = canvas ? captureTwinJpeg() : null;
       const mapJpeg = mapDataUrl ? jpegFromDataUrl(mapDataUrl) : null;
       const mc =
         sim.monteCarlo ??
@@ -62,8 +63,8 @@ export function VectorBriefingExport({ beat }: { beat: BriefingBeat }) {
         hospitals: sim.snapshot.hospitals,
       });
       const pdf = buildA4Pdf(model);
+      const png = rasterizeA4Png(model, canvas);
       downloadBytes(pdf, "application/pdf", `aeris-hk-briefing-beat-${beat.index + 1}.pdf`);
-      const png = await buildA4Png(model, mapDataUrl);
       downloadBytes(png, "image/png", `aeris-hk-briefing-beat-${beat.index + 1}.png`);
       setStatus(`Exported A4 PDF + PNG (${pdf.byteLength} B · ${png.byteLength} B)`);
     } catch (err) {
@@ -79,7 +80,7 @@ export function VectorBriefingExport({ beat }: { beat: BriefingBeat }) {
         type="button"
         data-testid="briefing-export"
         disabled={busy}
-        onClick={() => void exportSheet()}
+        onClick={exportSheet}
         className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/35 bg-cyan-400/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-cyan-100 hover:bg-cyan-400/20 disabled:opacity-50"
       >
         <FileDown className="h-3.5 w-3.5" />

@@ -14,7 +14,7 @@ import {
   KEYFRAME_MS,
   OPTIMAL_COUNTERFACTUAL_POLICY,
   briefingBeat,
-  lerpHourForward,
+  lerpHourCinematic,
   pickFukWaTrapBuilding,
   type BriefingBeat,
   type BriefingBeatEventDetail,
@@ -110,7 +110,7 @@ export function CinematicDirector() {
     let lastPosted = Number.NaN;
     const step = (now: number) => {
       const u = Math.min(1, (now - t0) / KEYFRAME_MS);
-      const hour = lerpHourForward(fromH, toH, easeInOutCubic(u));
+        const hour = lerpHourCinematic(fromH, toH, easeInOutCubic(u));
       if (Number.isNaN(lastPosted) || Math.abs(hour - lastPosted) >= 0.04 || u >= 1) {
         lastPosted = hour;
         simRef.current.setHour(hour);
