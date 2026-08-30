@@ -9,6 +9,7 @@ import { isTypingTarget } from "@/lib/hud";
 import { TWIN_DISTRICTS } from "@/lib/districts";
 import { TWIN_FLYIN_EVENT, TWIN_LOOKAT_EVENT, TWIN_ORBIT_EVENT } from "@/lib/twin-camera";
 import { AERIS_ESCAPE_EVENT, interpretHudKey } from "@/lib/hotkeys";
+import { BRIEFING_BEATS, dispatchBriefingBeat, dispatchBriefingStep } from "@/lib/presentation/beats";
 
 type PaletteItem = {
   id: string;
@@ -150,6 +151,24 @@ export function CommandPalette() {
       icon: "scenario",
       run: () => applyScenario(s.id as StressScenarioId),
     }));
+    const briefingItems: PaletteItem[] = [
+      {
+        id: "play-briefing",
+        group: "Briefing",
+        label: "Play executive briefing",
+        hint: "Cinematic director · 4 beats",
+        icon: "scenario",
+        run: () => dispatchBriefingBeat(0, "ui"),
+      },
+      ...BRIEFING_BEATS.map((b) => ({
+        id: `briefing-beat-${b.index}`,
+        group: "Briefing",
+        label: `Beat ${b.index + 1}: ${b.titleEn}`,
+        hint: `${String(b.hour).padStart(2, "0")}:00 HKT`,
+        icon: "scenario" as const,
+        run: () => dispatchBriefingBeat(b.index, "ui"),
+      })),
+    ];
     const copilotItems: PaletteItem[] = [
       {
         id: "live-monitoring",
@@ -187,6 +206,7 @@ export function CommandPalette() {
       },
     ];
     const all = [
+      ...briefingItems,
       ...copilotItems,
       ...districtItems,
       ...streetItems,
@@ -343,6 +363,16 @@ export function HudHotkeys() {
       if (action.type === "orbit") {
         event.preventDefault();
         window.dispatchEvent(new Event(TWIN_ORBIT_EVENT));
+        return;
+      }
+      if (action.type === "beat-next") {
+        event.preventDefault();
+        dispatchBriefingStep("next", "key");
+        return;
+      }
+      if (action.type === "beat-prev") {
+        event.preventDefault();
+        dispatchBriefingStep("prev", "key");
       }
     };
     window.addEventListener("keydown", onKey);

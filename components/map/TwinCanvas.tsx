@@ -34,6 +34,7 @@ import {
   HARBOUR_TWIN_VIEW,
   KOWLOON_TWIN_VIEW,
   TWIN_FLYIN_EVENT,
+  TWIN_KEYFRAME_EVENT,
   TWIN_LOOKAT_EVENT,
   TWIN_ORBIT_EVENT,
   cameraBasis,
@@ -122,7 +123,7 @@ export function TwinCanvas() {
   simRef.current = sim;
   const viewRef = useRef<TwinView>({ ...HARBOUR_TWIN_VIEW });
   const flyRef = useRef({ t0: 0, active: true });
-  const lookRef = useRef<{ t0: number; from: TwinView; to: TwinView } | null>(null);
+  const lookRef = useRef<{ t0: number; from: TwinView; to: TwinView; durationMs: number } | null>(null);
   const orbitRef = useRef<{ active: boolean; t0: number; base: TwinView } | null>(null);
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
   const ambulanceRef = useRef<AmbulanceParticle[]>([]);
@@ -196,6 +197,7 @@ export function TwinCanvas() {
           targetUp: 22,
           distance: Math.min(viewRef.current.distance, 480),
         },
+        durationMs: 900,
       };
       flyRef.current.active = false;
     };
@@ -208,13 +210,27 @@ export function TwinCanvas() {
       lookRef.current = null;
       orbitRef.current = { active: true, t0: performance.now(), base: { ...viewRef.current } };
     };
+    const onKeyframe = (event: Event) => {
+      const detail = (event as CustomEvent<{ view?: TwinView; durationMs?: number }>).detail;
+      if (!detail?.view) return;
+      orbitRef.current = null;
+      flyRef.current.active = false;
+      lookRef.current = {
+        t0: performance.now(),
+        from: { ...viewRef.current },
+        to: { ...detail.view },
+        durationMs: Math.max(120, detail.durationMs ?? 2600),
+      };
+    };
     window.addEventListener(TWIN_FLYIN_EVENT, onFly);
     window.addEventListener(TWIN_LOOKAT_EVENT, onLook);
     window.addEventListener(TWIN_ORBIT_EVENT, onOrbit);
+    window.addEventListener(TWIN_KEYFRAME_EVENT, onKeyframe);
     return () => {
       window.removeEventListener(TWIN_FLYIN_EVENT, onFly);
       window.removeEventListener(TWIN_LOOKAT_EVENT, onLook);
       window.removeEventListener(TWIN_ORBIT_EVENT, onOrbit);
+      window.removeEventListener(TWIN_KEYFRAME_EVENT, onKeyframe);
     };
   }, [startFlyIn]);
 
@@ -239,7 +255,7 @@ export function TwinCanvas() {
           viewRef.current = lerpView(HARBOUR_TWIN_VIEW, KOWLOON_TWIN_VIEW, t);
         }
       } else if (lookRef.current) {
-        const t = (now - lookRef.current.t0) / 900;
+        const t = (now - lookRef.current.t0) / Math.max(120, lookRef.current.durationMs);
         if (t >= 1) {
           viewRef.current = lookRef.current.to;
           lookRef.current = null;

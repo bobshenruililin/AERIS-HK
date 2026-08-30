@@ -52,8 +52,8 @@ export const FORMULAS = {
   "sol-air": {
     id: "sol-air",
     name: "Sol-Air Equation: Eq. 3",
-    identity: "q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)   ρ_asphalt=0.18  ρ_cool=0.65",
-    note: "Absorbed roof shortwave in lib/solar.ts roofAbsorbedShortwaveWm2. I_peak = 890 W/m². Not a Fiala UTCI term.",
+    identity: "q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)   ρ_asphalt=0.18  ρ_cool=0.65   T_sa = T_a + q_abs / h_o   h_o=22 W/m²K",
+    note: "Absorbed roof shortwave in lib/solar.ts roofAbsorbedShortwaveWm2. I_peak = 890 W/m². Sol-air temperature T_sa uses h_o = 22 W/m²K (SOL_AIR_HO_WM2K); hover ticks fire when T_sa > 40 °C. Not a Fiala UTCI term.",
   },
   nsga2: {
     id: "nsga2",

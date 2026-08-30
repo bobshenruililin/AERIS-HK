@@ -10,6 +10,7 @@ import { ExportReport } from "@/components/ui/ExportReport";
 import { ExecutiveBriefing } from "@/components/ui/ExecutiveBriefing";
 import { CausalStrip } from "@/components/ui/CausalStrip";
 import { BriefingButton } from "@/components/simulation/BriefingTour";
+import { dispatchBriefingBeat } from "@/lib/presentation/beats";
 import { FormulaTip } from "@/components/ui/FormulaTooltip";
 import { CitationMark } from "@/components/copilot/useCitationPulse";
 
@@ -74,6 +75,14 @@ export function Header() {
             </div>
           </button>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-testid="briefing-play"
+              onClick={() => dispatchBriefingBeat(0, "ui")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/35 bg-amber-400/10 px-3 py-1 text-[11px] text-amber-100 hover:bg-amber-400/20"
+            >
+              Play briefing
+            </button>
             <BriefingButton />
             <ExportReport />
             <ExecutiveBriefing />

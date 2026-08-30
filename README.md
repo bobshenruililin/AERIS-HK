@@ -103,6 +103,8 @@ Authoritative CRS: **HK1980 Grid (EPSG:2326)** on `properties.hk80` and PostGIS 
 | NSGA-II Pareto | 500 gen, cost / Cat 1–3 averted / ΔGini / MW | `lib/optimization/` |
 | HKO IDW field | \(ẑ=\sum d_i^{-2}z_i/\sum d_i^{-2}\) on SSP / KP / Kai Tak | `lib/telemetry/hko-feed.ts` |
 | LoRaWAN 劏房 mesh | 250 sensors, \(\tau=4\,\mathrm{h}\cdot(0.5+0.5\rho_{sub})\) | `lib/telemetry/sensor-network.ts` |
+| Sol-air temperature | \(T_{sa}=T_a+q_{abs}/h_o\), \(h_o=22\,\mathrm{W\,m^{-2}K^{-1}}\) | `lib/solar.ts` |
+| Heat soundscape | WBGT drone + Sol-Air \(>40^\circ\mathrm{C}\) ticks | `lib/audio/sonification.ts` |
 
 Hospital Authority clusters in the twin: **CMC** (Caritas Medical Centre), **KWH** (Kwong Wah), **QEH** (Queen Elizabeth). Live HKO / HA pollers remain on 60 s / 5 min cadences.
 
@@ -117,7 +119,8 @@ Interface density is solved with aerospace / VisionOS glass — **not** by remov
 - **Control Dock** (bottom pill): layers, playbar, Jul 2022 / Typhoon / Blackout, Share `?sim=`.
 - **Pinned ENU telemetry** on building pick; inspector tabs Thermal / Demographic / A&E Surge (Cat 1–3).
 - **Cinematic orbital camera** on TwinCanvas (Control Dock → Orbit).
-- **Keyboard**: `1–4` dock presets, `Space` play/pause, `⌘K` / `Ctrl+K` palette, `Esc` dismisses palette then pinned inspector HUDs. Formula `ƒ` tips on every biophysical spark (UTCI/WBGT, Fanger PMV, DLNM-style RR).
+- **Keyboard**: `1–4` dock presets, `Space` play/pause, `←` / `→` cinematic briefing beats, `⌘K` / `Ctrl+K` palette, `Esc` dismisses palette then pinned inspector HUDs. Formula `ƒ` tips on every biophysical spark (UTCI/WBGT, Fanger PMV, DLNM-style RR).
+- **Executive Presentation Suite**: `Play briefing` opens the cinematic director (camera + diurnal keyframes, Web Audio heat soundscape, one-click A4 PDF+PNG). Existing DH/WHO `ExportReport` and `ExecutiveBriefing` remain.
 - **Spatial Policy Copilot**: `Ask copilot` on the Control Dock / ⌘K. Natural language plans four Zod-validated tools (`run_counterfactual`, `focus_hotspot`, `query_hospital_capacity`, `compare_scenarios`) via OpenAI, Anthropic, Neon AI Gateway, or the offline intent parser. The twin flies to the canyon, scrubs to peak thermal hour, and paints green/red CVI delta polygons. Every sentence cites the live engine (`[Sol-Air Equation: Eq. 3]`, DuckDB footprint counts, Neon run id).
 
 ---

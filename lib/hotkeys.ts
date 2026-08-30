@@ -11,7 +11,9 @@ export type HudKeyAction =
   | { type: "search" }
   | { type: "dismiss" }
   | { type: "flyin" }
-  | { type: "orbit" };
+  | { type: "orbit" }
+  | { type: "beat-next" }
+  | { type: "beat-prev" };
 
 export interface HudKeyContext {
   typing: boolean;
@@ -45,5 +47,7 @@ export function interpretHudKey(event: HudKeyLike, ctx: HudKeyContext): HudKeyAc
   }
   if (key === "f" || key === "F") return { type: "flyin" };
   if (key === "o" || key === "O") return { type: "orbit" };
+  if (key === "ArrowRight") return { type: "beat-next" };
+  if (key === "ArrowLeft") return { type: "beat-prev" };
   return null;
 }
