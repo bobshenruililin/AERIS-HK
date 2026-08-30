@@ -5,16 +5,28 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
 
 export function HospitalBoard() {
-  const { snapshot } = useSimulation();
+  const { snapshot, haNowcast, haError } = useSimulation();
+  const delay =
+    haNowcast?.hospitals.reduce((m, h) => Math.max(m, h.occupancyDelayMinutes), 0) ??
+    haNowcast?.waitBoardDelayMinutes ??
+    null;
 
   return (
     <div className="pointer-events-none absolute left-0 top-52 z-20 w-full max-w-sm p-3 md:p-4">
       <GlassPanel>
         <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">HA Kowloon West surge</div>
-        <h2 className="mb-2 text-sm font-semibold text-white">CMC · KWH · QEH overflow</h2>
+        <h2 className="mb-1 text-sm font-semibold text-white">CMC · KWH · QEH overflow</h2>
+        <div className="mb-2 text-[10px] text-slate-400">
+          {haNowcast
+            ? `Anonymised A&E nowcast · ${delay ?? 0} min CMS lag · hospital aggregates only`
+            : haError
+              ? `HA nowcast error: ${haError}`
+              : "HA CMS / A&E nowcast ingest…"}
+        </div>
         <div className="space-y-2">
           {snapshot.hospitals.map((h) => {
             const spec = HOSPITALS.find((s) => s.code === h.code);
+            const live = haNowcast?.hospitals.find((n) => n.code === h.code);
             const occ = h.bedOccupancy * 100;
             const tone = occ >= 100 ? "bg-red-400" : occ >= 92 ? "bg-amber-400" : "bg-emerald-400";
             return (
@@ -36,8 +48,15 @@ export function HospitalBoard() {
                   <span>ED {(h.edQueue.utilization * 100).toFixed(0)}%</span>
                 </div>
                 <div className="text-[10px] text-slate-500">
-                  Beds {occ.toFixed(1)}% · wait {h.edQueue.waitHours.toFixed(2)} h · deficit {h.bedDeficitPct.toFixed(2)}%
+                  Beds {occ.toFixed(1)}% ({h.occupancySource === "delayed-nowcast" ? "delayed census" : "model"}) · wait{" "}
+                  {h.edQueue.waitHours.toFixed(2)} h · μ {h.calibratedMu.toFixed(2)} / c {h.calibratedServers}
                 </div>
+                {live?.waitCat3P50Minutes != null ? (
+                  <div className="text-[10px] text-cyan-200/80">
+                    HA Cat 3 p50 {live.waitCat3P50Minutes} min
+                    {live.managingMultipleResus ? " · multiple resus" : ""}
+                  </div>
+                ) : null}
               </div>
             );
           })}

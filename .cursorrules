@@ -35,6 +35,7 @@ When given a `/goal` (or any multi-step mission):
 - Gagge 2-node remains `S = M - W - E - R - C` in `lib/epidemiology-engine.ts`. Do not collapse it to a single temperature proxy without those five terms.
 - High subdivided density + high AC rejector load must retain a ~6 h indoor phase lag with indoor T > 32°C between 21:00 and 03:00.
 - HA nodes are CMC, KWH, and QEH (QEH is modelled as regional overflow, not a KWC hospital). M/M/c utilisation must saturate safely (ρ < 1 handling).
+- A&E nowcast is hospital-level aggregates only. Never persist HKID, names, episode numbers, bed numbers, or any patient-level identifier. Calibrate μ from Cat 1–3 mix and c from observed Cat 3 wait.
 
 ## Product language
 

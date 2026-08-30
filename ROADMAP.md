@@ -32,9 +32,13 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] `scripts/ingest-hk80.sql` migration + `npm run ingest:hk80`
 - [x] CRS round-trip tests (`npm run test:crs`) for JS Helmert/TM and PostGIS `ST_Transform`
 
-### `/goal` HA CMS / A&E anonymised nowcast
+### `/goal` HA CMS / A&E anonymised nowcast (complete)
 
-Connect (or mock with realistic delays) Kowloon West A&E occupancy. Calibrate M/M/c μ and c from observed Cat 1–3 mix. Never ship patient-level identifiers.
+- [x] Live HA Open Data A&E waits (`aedwtdata2-en.json`) for CMC, KWH, QEH — hospital-level only
+- [x] Delayed CMS occupancy mock (15-minute census lag) with optional aggregate occupancy webhook
+- [x] M/M/c μ calibrated from observed Cat 1–3 mix; c calibrated from Cat 3 p50 wait
+- [x] Privacy gate rejects patient-level keys / HKID-shaped tokens (`npm run test:ha`)
+- [x] `GET /api/ha/nowcast` and `POST /api/ha/ingest` never ship patient identifiers
 
 ### `/goal` Cool-roof targeting optimiser
 

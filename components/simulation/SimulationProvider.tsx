@@ -22,6 +22,7 @@ import type {
   SpatialSnapshotMeta,
   SystemHourSnapshot,
 } from "@/lib/types";
+import type { HaNowcast } from "@/lib/ha/types";
 import { DEFAULT_POLICY } from "@/lib/types";
 import { getBuildings } from "@/lib/spatial-data";
 import { SYNTHETIC_SPATIAL_META } from "@/lib/spatial-source";
@@ -55,6 +56,8 @@ interface SimulationContextValue {
   envelope: HkoDiurnalEnvelope | null;
   envelopeError: string | null;
   spatial: SpatialSnapshotMeta;
+  haNowcast: HaNowcast | null;
+  haError: string | null;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
@@ -77,6 +80,14 @@ async function fetchSpatialBuildings(): Promise<SpatialBuildingsPayload> {
     throw new Error(`Spatial buildings HTTP ${res.status}`);
   }
   return (await res.json()) as SpatialBuildingsPayload;
+}
+
+async function fetchHaNowcast(): Promise<HaNowcast> {
+  const res = await fetch("/api/ha/nowcast", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`HA nowcast HTTP ${res.status}`);
+  }
+  return (await res.json()) as HaNowcast;
 }
 
 async function fetchFootprintsIpc(): Promise<{ bytes: Uint8Array; meta: Partial<SpatialSnapshotMeta> }> {
@@ -111,6 +122,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [analytics, setAnalytics] = useState<DuckDbQueryBundle | null>(null);
   const [envelope, setEnvelope] = useState<HkoDiurnalEnvelope | null>(null);
   const [envelopeError, setEnvelopeError] = useState<string | null>(null);
+  const [haNowcast, setHaNowcast] = useState<HaNowcast | null>(null);
+  const [haError, setHaError] = useState<string | null>(null);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
 
@@ -129,6 +142,29 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
         .catch((error: unknown) => {
           if (!cancelled) {
             setEnvelopeError(error instanceof Error ? error.message : "HKO ingest failed");
+          }
+        });
+    };
+    load();
+    const id = window.setInterval(load, 120_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void fetchHaNowcast()
+        .then((next) => {
+          if (cancelled) return;
+          setHaNowcast(next);
+          setHaError(null);
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setHaError(error instanceof Error ? error.message : "HA nowcast failed");
           }
         });
     };
@@ -179,12 +215,12 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     [policy, buildings, envelope],
   );
   const impact = useMemo(
-    () => computePolicyImpact(policy, buildings, envelope),
-    [policy, buildings, envelope],
+    () => computePolicyImpact(policy, buildings, envelope, haNowcast),
+    [policy, buildings, envelope, haNowcast],
   );
   const snapshot = useMemo(
-    () => evaluateSystemAtHour(hour, policy, buildings, cache, envelope),
-    [hour, policy, buildings, cache, envelope],
+    () => evaluateSystemAtHour(hour, policy, buildings, cache, envelope, haNowcast),
+    [hour, policy, buildings, cache, envelope, haNowcast],
   );
 
   const hourlyFlat = useMemo(() => Array.from(cache.values()), [cache]);
@@ -259,6 +295,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       envelope,
       envelopeError,
       spatial,
+      haNowcast,
+      haError,
     }),
     [
       buildings,
@@ -278,6 +316,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       envelope,
       envelopeError,
       spatial,
+      haNowcast,
+      haError,
     ],
   );
 

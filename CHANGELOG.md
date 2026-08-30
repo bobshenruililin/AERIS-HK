@@ -2,6 +2,18 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.4.0] — 2026-08-30
+
+### Added
+
+- Anonymised HA A&E nowcast: live Open Data waits for CMC / KWH / QEH plus delayed CMS occupancy aggregates.
+- M/M/c μ calibrated from Cat 1–3 mix and server count c from Cat 3 p50 wait.
+- `GET /api/ha/nowcast`, `POST /api/ha/ingest`, and `npm run test:ha` privacy + calibration suite.
+
+### Changed
+
+- Hospital surge board shows calibrated μ/c, HA Cat 3 wait, and occupancy source (delayed census vs model).
+
 ## [0.3.0] — 2026-08-30
 
 ### Added

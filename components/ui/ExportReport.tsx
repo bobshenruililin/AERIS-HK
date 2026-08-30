@@ -8,7 +8,7 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
 
 export function ExportReport() {
-  const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial } = useSimulation();
+  const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial, haNowcast } = useSimulation();
   const [open, setOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const label = hkoStatusLabel(snapshot.hkoStatus);
@@ -121,6 +121,8 @@ export function ExportReport() {
                     <th>Cat 3</th>
                     <th>ED utilisation</th>
                     <th>Wait (h)</th>
+                    <th>μ</th>
+                    <th>c</th>
                     <th>Bed occ.</th>
                     <th>RMR</th>
                   </tr>
@@ -134,6 +136,8 @@ export function ExportReport() {
                       <td>{h.arrivals.category3.toFixed(2)}</td>
                       <td>{(h.edQueue.utilization * 100).toFixed(1)}%</td>
                       <td>{h.edQueue.waitHours.toFixed(2)}</td>
+                      <td>{h.calibratedMu.toFixed(2)}</td>
+                      <td>{h.calibratedServers}</td>
                       <td>{(h.bedOccupancy * 100).toFixed(1)}%</td>
                       <td>{h.relativeMortalityIndex.toFixed(3)}</td>
                     </tr>
@@ -196,12 +200,15 @@ export function ExportReport() {
                 for Deck.gl ({spatial.authority}, {spatial.buildingCount} buildings
                 {spatial.dualWrite ? ", dual-write on" : ""}). Meteorological forcing is a rolling 24-hour HKO
                 envelope (observed AWS + 9-day FND anchors) ingested server-side from data.weather.gov.hk via
-                /api/hko/envelope and /api/hko/ingest.
+                /api/hko/envelope and /api/hko/ingest. Kowloon West A&E nowcast is hospital-level only (no patient
+                identifiers): live HA Open Data waits plus a delayed CMS occupancy aggregate calibrate M/M/c μ from
+                the Cat 1–3 mix and c from Cat 3 p50 wait
+                {haNowcast ? ` (board ${haNowcast.waitBoardAsOf ?? "n/a"}, occupancy lag ${haNowcast.hospitals[0]?.occupancyDelayMinutes ?? "?"} min)` : ""}.
               </p>
               <p className="meta">
                 Disclaimer: Synthetic tong lau morphology stored in PostGIS as HK80 (EPSG:2326) with dual-write
-                WGS84 for mapping, plus live HKO Open Data meteorological forcing (rhrread, 1-minute AWS CSV,
-                warnsum WHOT, 9-day FND). Not an official HKO or HA product.
+                WGS84 for mapping, live HKO Open Data meteorology, and anonymised HA A&E wait/occupancy aggregates.
+                Not an official HKO or HA product. No patient-level identifiers are ingested or stored.
               </p>
             </div>
           </div>

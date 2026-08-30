@@ -11,7 +11,7 @@ import { solarElevationDeg } from "@/lib/solar";
 import { ExportReport } from "@/components/ui/ExportReport";
 
 export function Header() {
-  const { snapshot, analytics, hour, envelope, envelopeError, spatial } = useSimulation();
+  const { snapshot, analytics, hour, envelope, envelopeError, spatial, haNowcast, haError } = useSimulation();
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const elev = solarElevationDeg(hour);
   const bedPct = snapshot.clusterBedStress * 100;
@@ -53,6 +53,11 @@ export function Header() {
     analytics?.footprintsLoaded
       ? `DuckDB footprints JOIN ${analytics.footprintCount}`
       : "DuckDB footprints pending",
+    haNowcast
+      ? `HA A&E nowcast ${haNowcast.waitBoardAsOf ?? "live"} · ${haNowcast.hospitals.length} hospitals · μ/c from Cat 1–3 mix · ${haNowcast.hospitals[0]?.occupancyDelayMinutes ?? 0} min occupancy lag · no patient IDs`
+      : haError
+        ? `HA nowcast error: ${haError}`
+        : "HA CMS / A&E nowcast ingest…",
     `Solar elevation ${elev.toFixed(1)}° · ${formatHourLabel(hour)} HKT`,
   ];
 

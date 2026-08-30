@@ -23,6 +23,7 @@ import { clamp, lerp, wrapHour } from "./utils";
 import { getBuildings } from "./spatial-data";
 import type { HkoDiurnalEnvelope } from "./hko/types";
 import { sampleHkoEnvelope } from "./hko/envelope";
+import type { HaNowcast } from "./ha/types";
 
 const STEFAN_LINEAR_HR = 4.7;
 const LEWIS_RATIO = 16.5;
@@ -388,12 +389,36 @@ function splitTriage(total: number, cviMean: number): TriageMix {
   };
 }
 
+export function calibrateEdServers(
+  lambda: number,
+  mu: number,
+  targetWaitHours: number,
+  hint: number,
+): number {
+  const lo = Math.max(4, hint - 10);
+  const hi = Math.min(40, hint + 16);
+  let best = Math.max(1, hint);
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let c = lo; c <= hi; c += 1) {
+    const q = mmcQueue(lambda, mu, c);
+    const waitErr = Math.abs(q.waitHours - Math.max(0, targetWaitHours));
+    const satPen = q.utilization >= 0.995 ? 4 : 0;
+    const score = waitErr * 12 + satPen;
+    if (score < bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
+}
+
 function evaluateHospital(
   spec: HospitalSpec,
   hour: number,
   buildingStates: BuildingHourState[],
   buildings: BuildingFeature[],
   policy: PolicyState,
+  nowcast: HaNowcast | null,
 ): HospitalHourState {
   const byId = new Map(buildings.map((b) => [b.properties.id, b]));
   let lambda = 0;
@@ -409,11 +434,28 @@ function evaluateHospital(
     cviW += arrivals;
   }
   const cviMean = cviW > 0 ? cviAcc / cviW : 50;
-  const arrivals = splitTriage(lambda, cviMean);
-  const edQueue = mmcQueue(lambda, spec.muPerHour, spec.edServers);
+  const observed = nowcast?.hospitals.find((h) => h.code === spec.code) ?? null;
+  const arrivals = observed
+    ? {
+        category1: lambda * observed.mix.p1,
+        category2: lambda * observed.mix.p2,
+        category3: lambda * observed.mix.p3,
+        total: lambda,
+      }
+    : splitTriage(lambda, cviMean);
+  const mu = observed?.muPerHour ?? spec.muPerHour;
+  const waitHours =
+    observed?.waitCat3P50Minutes != null ? observed.waitCat3P50Minutes / 60 : null;
+  const servers =
+    waitHours != null ? calibrateEdServers(lambda, mu, waitHours, spec.edServers) : spec.edServers;
+  const edQueue = mmcQueue(lambda, mu, servers);
   const admittedShare = 0.38 + 0.22 * (cviMean / 100);
-  const occupancy =
+  const modelledOcc =
     spec.baselineOccupancy + (admittedShare * lambda * 14) / spec.staffedAcuteBeds;
+  const nearNow =
+    Boolean(nowcast) && Math.abs(wrapHour(hour) - wrapHour(nowcast?.nowHour ?? hour)) < 0.85;
+  const occupancySource = observed && nearNow ? ("delayed-nowcast" as const) : ("model" as const);
+  const occupancy = occupancySource === "delayed-nowcast" ? observed!.occupancyFrac : modelledOcc;
   const bedOccupancy = clamp(occupancy, 0.4, 1.35);
   const bedDeficitPct = Math.max(0, (bedOccupancy - 1) * 100);
   const waitPenalty = 0.55 * Math.max(0, edQueue.waitHours);
@@ -431,6 +473,11 @@ function evaluateHospital(
     bedOccupancy,
     bedDeficitPct,
     relativeMortalityIndex,
+    calibratedMu: mu,
+    calibratedServers: servers,
+    occupancySource,
+    waitCat3P50Minutes: observed?.waitCat3P50Minutes ?? null,
+    nowcastDelayMinutes: observed?.occupancyDelayMinutes ?? null,
   };
 }
 
@@ -461,9 +508,12 @@ export function evaluateSystemAtHour(
   buildings: BuildingFeature[] = getBuildings(),
   cache?: Map<string, BuildingHourState>,
   envelope: HkoDiurnalEnvelope | null = null,
+  nowcast: HaNowcast | null = null,
 ): SystemHourSnapshot {
   const buildingStates = buildings.map((b) => evaluateBuildingInterpolated(b, hour, policy, cache, envelope));
-  const hospitals = HOSPITALS.map((spec) => evaluateHospital(spec, hour, buildingStates, buildings, policy));
+  const hospitals = HOSPITALS.map((spec) =>
+    evaluateHospital(spec, hour, buildingStates, buildings, policy, nowcast),
+  );
   const regionalMeanWbgt =
     buildingStates.reduce((s, b) => s + b.microWbgt, 0) / Math.max(1, buildingStates.length);
   const regionalMeanCvi =
@@ -503,6 +553,7 @@ export function computePolicyImpact(
   policy: PolicyState,
   buildings: BuildingFeature[] = getBuildings(),
   envelope: HkoDiurnalEnvelope | null = null,
+  nowcast: HaNowcast | null = null,
 ): PolicyImpact {
   const baselineCache = precomputeHourlyCache(BASELINE_POLICY, buildings, envelope);
   const scenarioCache = precomputeHourlyCache(policy, buildings, envelope);
@@ -514,8 +565,8 @@ export function computePolicyImpact(
   let scenarioDef = 0;
 
   for (let hour = 0; hour < 24; hour += 1) {
-    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope);
-    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope);
+    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope, nowcast);
+    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope, nowcast);
     baselineAdmissions24h += base.totalCat13Arrivals;
     scenarioAdmissions24h += scen.totalCat13Arrivals;
     const baseMort = base.hospitals.reduce((s, h) => s + h.relativeMortalityIndex, 0) / 3;

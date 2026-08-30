@@ -145,6 +145,11 @@ export interface HospitalHourState {
   bedOccupancy: number;
   bedDeficitPct: number;
   relativeMortalityIndex: number;
+  calibratedMu: number;
+  calibratedServers: number;
+  occupancySource: "delayed-nowcast" | "model";
+  waitCat3P50Minutes: number | null;
+  nowcastDelayMinutes: number | null;
 }
 
 export interface SystemHourSnapshot {
