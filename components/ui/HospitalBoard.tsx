@@ -5,6 +5,7 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
 import { HudDrawer, HudPill } from "./HudDrawer";
 import { FormulaTip } from "./FormulaTooltip";
+import { CitationMark } from "@/components/copilot/useCitationPulse";
 
 export function HospitalBoard() {
   const { snapshot, haNowcast, haError, focusedHospital, setFocusedHospital, isDrawerExpanded, toggleDrawer } =
@@ -33,6 +34,7 @@ export function HospitalBoard() {
       }
     >
       <GlassPanel>
+        <CitationMark highlight="queue" block>
         <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">
           <FormulaTip id="mmc">HA Kowloon West surge</FormulaTip>
         </div>
@@ -106,6 +108,7 @@ export function HospitalBoard() {
             );
           })}
         </div>
+        </CitationMark>
       </GlassPanel>
     </HudDrawer>
   );

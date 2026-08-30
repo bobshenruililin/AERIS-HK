@@ -87,6 +87,7 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Super Typhoon + post-storm heat surge and 劏房 3 AM concrete thermal-battery stress plates
 - [x] Executive Briefing Mode (population at risk, HA bed deficit, ROI/$)
 - [x] Full-stack hardening: WebGL/WASM/Worker failover, error boundaries, hydration gate, keyboard 1–4/Space/⌘K/Esc, formula micro-tooltips, `tsc --noEmit` clean
+- [x] Spatial Policy Copilot: Zod tool calling (`run_counterfactual` / `focus_hotspot` / `query_hospital_capacity` / `compare_scenarios`), Deck.gl + TwinCanvas fly-to + peak-hour scrub + green/red CVI diffs, click-to-highlight physics citations
 - [ ] Figma / Notion / Canva / Drive MCP (requires Cursor desktop authentication)
 - [ ] Authentication and audit log for HA/DH users (login)
 - [ ] Traditional Chinese screen-reader pass and WCAG contrast on glass panels

@@ -114,6 +114,7 @@ Interface density is solved with aerospace / VisionOS glass — **not** by remov
 - **Pinned ENU telemetry** on building pick; inspector tabs Thermal / Demographic / A&E Surge (Cat 1–3).
 - **Cinematic orbital camera** on TwinCanvas (Control Dock → Orbit).
 - **Keyboard**: `1–4` dock presets, `Space` play/pause, `⌘K` / `Ctrl+K` palette, `Esc` dismisses palette then pinned inspector HUDs. Formula `ƒ` tips on every biophysical spark (UTCI/WBGT, Fanger PMV, DLNM-style RR).
+- **Spatial Policy Copilot**: `Ask copilot` on the Control Dock / ⌘K. Natural language plans four Zod-validated tools (`run_counterfactual`, `focus_hotspot`, `query_hospital_capacity`, `compare_scenarios`) via OpenAI, Anthropic, Neon AI Gateway, or the offline intent parser. The twin flies to the canyon, scrubs to peak thermal hour, and paints green/red CVI delta polygons. Every sentence cites the live engine (`[Sol-Air Equation: Eq. 3]`, DuckDB footprint counts, Neon run id).
 
 ---
 
@@ -151,7 +152,7 @@ npm run test:twin && npm run test:decade && npm run test:solar
 npm run test:mc && npm run test:scenarios && npm run test:bio
 npm run test:h3 && npm run test:db && npm run test:spatial
 npm run test:instance && npm run test:arrow && npm run test:cache
-npm run test:triage && npm run test:briefing && npm run test:hardening
+npm run test:triage && npm run test:briefing && npm run test:hardening && npm run test:agent
 npm run build
 ```
 
@@ -165,8 +166,8 @@ npm run build
 | `static/` | District choropleth UI |
 | `tests/` | Python pytest suite |
 | `app/` | Next.js App Router + `/api/simulations` |
-| `lib/` | CRS, physics, Neon, DuckDB, H3, GPU |
-| `components/` | TwinCanvas, Deck overlay, HUD, dock |
+| `lib/` | CRS, physics, Neon, DuckDB, H3, GPU, Spatial Policy Copilot |
+| `components/` | TwinCanvas, Deck overlay, HUD, dock, `components/copilot/PolicyAgent.tsx` |
 | `scripts/` | Seed, neon ping, DuckDB bench |
 | `drizzle/` | SQL migrations |
 | `PERFORMANCE_AUDIT.md` | Before/after Deck.gl, Arrow, Neon benches |

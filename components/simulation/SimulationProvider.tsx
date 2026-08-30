@@ -75,6 +75,7 @@ import {
   replaceSimQueryParam,
 } from "@/lib/simulations-client";
 import { sampleHkoEnvelope } from "@/lib/hko/envelope";
+import { EMPTY_COPILOT, shiftEnvelopeTemp, type CopilotSpatialState } from "@/lib/agent";
 
 interface SimulationContextValue {
   buildings: BuildingFeature[];
@@ -137,6 +138,12 @@ interface SimulationContextValue {
   saveSimulation: () => Promise<string | null>;
   loadSimulation: (id: string) => Promise<boolean>;
   simulationSaving: boolean;
+  copilot: CopilotSpatialState;
+  setCopilot: (next: CopilotSpatialState) => void;
+  copilotAmbientDeltaC: number;
+  setCopilotAmbientDeltaC: (delta: number) => void;
+  copilotPanelOpen: boolean;
+  setCopilotPanelOpen: (open: boolean) => void;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
@@ -227,6 +234,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [simId, setSimId] = useState<string | null>(null);
   const [savedRuns, setSavedRuns] = useState<SimulationRunDto[]>([]);
   const [simulationSaving, setSimulationSaving] = useState(false);
+  const [copilot, setCopilot] = useState<CopilotSpatialState>(EMPTY_COPILOT);
+  const [copilotAmbientDeltaC, setCopilotAmbientDeltaC] = useState(0);
+  const [copilotPanelOpen, setCopilotPanelOpen] = useState(false);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
   const budgetTouched = useRef(false);
@@ -339,9 +349,13 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     [envelope, episodeId],
   );
   const scenario = scenarioId ? scenarioById(scenarioId) : null;
-  const forcedEnvelope = useMemo(
+  const scenarioEnvelope = useMemo(
     () => applyScenarioEnvelope(episodeEnvelope, scenario),
     [episodeEnvelope, scenario],
+  );
+  const forcedEnvelope = useMemo(
+    () => shiftEnvelopeTemp(scenarioEnvelope, copilotAmbientDeltaC),
+    [scenarioEnvelope, copilotAmbientDeltaC],
   );
   const forcing = scenario?.forcing ?? DEFAULT_PHYSICS_FORCING;
   const totalRoofM2 = useMemo(() => totalRoofAreaM2(buildings), [buildings]);
@@ -506,6 +520,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       ...DEFAULT_POLICY,
       coolRoofBudgetM2: defaultCoolRoofBudgetM2(buildings),
     });
+    setCopilot(EMPTY_COPILOT);
+    setCopilotAmbientDeltaC(0);
   }, [buildings]);
 
   const setHudPreset = useCallback((id: HudPresetId) => {
@@ -778,6 +794,12 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       saveSimulation,
       loadSimulation,
       simulationSaving,
+      copilot,
+      setCopilot,
+      copilotAmbientDeltaC,
+      setCopilotAmbientDeltaC,
+      copilotPanelOpen,
+      setCopilotPanelOpen,
     }),
     [
       buildings,
@@ -830,6 +852,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       saveSimulation,
       loadSimulation,
       simulationSaving,
+      copilot,
+      copilotAmbientDeltaC,
+      copilotPanelOpen,
     ],
   );
 

@@ -49,6 +49,12 @@ export const FORMULAS = {
     identity: "max Σ averted_i  s.t.  Σ roof_m2_i ≤ budget,  s_i ∈ {0,1}",
     note: "Exact DP on 24-hour admissions averted. DuckDB ROW_NUMBER + running SUM(roof_m2) OVER ranks the same table.",
   },
+  "sol-air": {
+    id: "sol-air",
+    name: "Sol-Air Equation: Eq. 3",
+    identity: "q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)   ρ_asphalt=0.18  ρ_cool=0.65",
+    note: "Absorbed roof shortwave in lib/solar.ts roofAbsorbedShortwaveWm2. I_peak = 890 W/m². Not a Fiala UTCI term.",
+  },
 } as const;
 
 export type FormulaId = keyof typeof FORMULAS;

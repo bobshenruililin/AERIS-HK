@@ -62,7 +62,11 @@ export function sunDirectionVec(hour: number): [number, number, number] {
   return [-Math.sin(az) * cosEl, -Math.cos(az) * cosEl, -Math.sin(Math.max(el, 0.02))];
 }
 
-/** Absorbed shortwave on a roof, W/m², albedo 0.18 asphalt vs 0.65 cool roof. */
+/**
+ * Sol-Air Equation: Eq. 3
+ * q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)
+ * ρ_asphalt = 0.18, ρ_cool = 0.65
+ */
 export function roofAbsorbedShortwaveWm2(hour: number, coolRoof: boolean): number {
   const peak = 890;
   const albedo = coolRoof ? 0.65 : 0.18;

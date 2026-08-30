@@ -284,3 +284,44 @@ Attached to: Header 24h spark + Micro-WBGT hero, TimeScrubber bars (UTCI + PMV +
 
 Zero-deletion invariant unchanged: presets 1–4, Gagge identity, knapsack, Monte Carlo, decade observatory, Control Dock, Cmd+K, Fanger/WBGT, 劏房 battery, H3, Neon `?sim=`, FastAPI `aeris_hk/` + `static/`.
 
+---
+
+## 11. Delivery ledger — Spatial Policy Copilot (0.13.0)
+
+Requirement-by-requirement evidence. Gates: `npx tsc --noEmit`, `npm run test:agent`.
+
+### 11.1 Structured tool calling & intent parser (`lib/agent/tools.ts`)
+
+| Tool | Arguments | Evidence |
+| --- | --- | --- |
+| `run_counterfactual` | `district`, `ac_reduction_pct`, `cool_roof_penetration`, `ambient_delta` | Zod `RunCounterfactualArgsSchema`; JSON Schema in `TOOL_DEFINITIONS`; AI SDK `tool()` in `lib/agent/runtime.ts`; apply path sets AC bylaw, cool-roof m², envelope ΔT |
+| `focus_hotspot` | `threshold_cvi`, `triage_tier`, `metric` | Filters snapshot CVI/tier, ranks `cvi\|wbgt\|indoor\|pmv\|occupancy`, flies to the hottest canyon |
+| `query_hospital_capacity` | `cluster_id`, `hour_of_day` | Scrubs the diurnal slider; flies to CMC/KWH/QEH/PMH or KWC midpoint; catchment highlight |
+| `compare_scenarios` | `scenario_a_id`, `scenario_b_id` | Applies plate A live; `compareScenarioDiff` = CVI(B)−CVI(A); green if B cooler |
+
+Runtime order: Neon AI Gateway (`NEON_AI_GATEWAY_*`) → Anthropic → OpenAI → deterministic `parseIntent` (`lib/agent/intent.ts`). Every LLM plan is re-validated with `AgentPlanSchema.parse`. `POST /api/agent` is the only client entry; `runtime.ts` is `server-only` and is **not** re-exported from `lib/agent/index.ts`.
+
+### 11.2 Real-time map synchronization
+
+| Action | TwinCanvas (default) | Deck.gl (`?gpu=1`) |
+| --- | --- | --- |
+| Pan/fly | Existing `TWIN_LOOKAT_EVENT` look-at lerp | `AERISMap` listens and `FlyToInterpolator` to lon/lat, zoom ≥ 16.75 |
+| Peak thermal hour | `planToPatch` sets `hour` via `peakThermalHour` (default 15; 3 AM for 劏房 battery) | Same HUD `setHour` — TimeScrubber / Control Dock playbar |
+| Green/red diffs | Ground polygons before extrusions (`delta < 0` emerald, `> 0` crimson) | `GeoJsonLayer` id `copilot-diff`, WGS84 rings only |
+
+### 11.3 Agentic citation & audit trail
+
+Chat sentences include square-bracket citations. Click sets `copilot.citationId` / `citationHighlight` and pulses HUD nodes with `data-citation` (`aeris-cite-hit`): roofs, Gagge inspector, WBGT/PMV, DuckDB ticker, ENU grid, Neon episode, M/M/c board, knapsack. Labels use **live** footprint/vector counts (`formatDuckDbCitation`) and the real Neon `simId` (`formatNeonCitation`) — never a fake 12,400.
+
+Sol-Air Eq. 3 is `q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)` in `lib/solar.ts`. Outdoor heat remains ISO 7243 WBGT (not Fiala UTCI).
+
+### 11.4 SSR / TypeScript
+
+| Gate | Evidence |
+| --- | --- |
+| SSR | PolicyAgent / maps are `"use client"`. Agent LLM SDK stays on the Route Handler. `flyTo` no-ops without `window`. |
+| `npx tsc --noEmit` | `npm run typecheck` |
+| Tests | `npm run test:agent` — four tools, Zod round-trip, compare sign, CMC 15:00, july vs blackout, citation split, SSR barrel |
+
+Zero-deletion invariant unchanged from §10.
+

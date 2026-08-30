@@ -10,6 +10,7 @@ import { streetSpinesFromBuildings } from "@/lib/streets";
 import { buildingCentroid } from "@/lib/spatial-data";
 import { aggregateHeatPlumes } from "@/lib/h3-index";
 import type { BuildingFeature, HospitalCode, SystemHourSnapshot } from "@/lib/types";
+import type { CopilotDiffCell, CopilotSpatialState } from "@/lib/agent";
 import type { HudLayers } from "@/lib/hud";
 import { advectWindParticles, createWindParticles, type WindParticle } from "@/lib/wind-field";
 import {
@@ -286,6 +287,8 @@ export function TwinCanvas() {
         lod,
         instanceSlice: slice,
         hexes: lod === 0 ? hexes9Ref.current : hexes10Ref.current,
+        copilot: state.copilot,
+        parentIds: packRef.current.parentIds,
       });
       raf = requestAnimationFrame(loop);
     };
@@ -354,8 +357,11 @@ function drawDistrictInstances(
   basis: ReturnType<typeof cameraBasis>,
   dpr: number,
   now: number,
+  highlightIds: string[],
+  parentIds: string[],
 ): void {
   const pulse = 0.55 + 0.45 * Math.sin(now / 420);
+  const highlightSet = highlightIds.length > 0 ? new Set(highlightIds) : null;
   for (let i = 0; i < slice.count; i += 1) {
     const lon = slice.instancePositions[i * 3];
     const lat = slice.instancePositions[i * 3 + 1];
@@ -365,7 +371,9 @@ function drawDistrictInstances(
     if (!p.visible) continue;
     const color = packedInstanceColor(slice, i);
     const size = Math.max(1.4 * dpr, (elev / Math.max(80, view.distance)) * h * 0.42);
-    ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${0.55 + 0.2 * pulse})`;
+    const id = parentIds[i];
+    const dimmed = Boolean(highlightSet && id && !highlightSet.has(id));
+    ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${dimmed ? 0.18 : 0.55 + 0.2 * pulse})`;
     ctx.fillRect(p.x - size * 0.28, p.y - size, size * 0.56, size);
   }
 }
@@ -393,6 +401,8 @@ function drawFrame(
     lod: LodLevel;
     instanceSlice: HourInstanceSlice;
     hexes: ReturnType<typeof aggregateHeatPlumes>;
+    copilot: CopilotSpatialState;
+    parentIds: string[];
   },
 ) {
   const parent = canvas.parentElement;
@@ -414,6 +424,9 @@ function drawFrame(
   const windowOnly = new Set(args.windowIds.filter((id) => !targeted.has(id)));
   const cvi = new Map(args.snapshot.buildings.map((row) => [row.buildingId, row.cvi]));
   const pulse = 0.55 + 0.45 * Math.sin(args.now / 420);
+  const highlightSet = args.copilot.highlightIds.length > 0 ? new Set(args.copilot.highlightIds) : null;
+  const diffById = new Map((args.copilot.diff ?? []).map((cell: CopilotDiffCell) => [cell.buildingId, cell]));
+  const citeRoofs = args.copilot.citationHighlight === "roofs";
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const skyTop = day ? "#071525" : "#02040c";
@@ -503,6 +516,18 @@ function drawFrame(
   );
   fillPoly(ctx, land, day ? "rgba(12, 18, 28, 0.96)" : "rgba(8, 12, 20, 0.97)", "rgba(15,23,42,0.8)", 1);
 
+  if (diffById.size > 0) {
+    for (const mesh of args.meshes) {
+      const cell = diffById.get(mesh.id);
+      if (!cell || Math.abs(cell.delta) < 0.05) continue;
+      const projected = projectRing(mesh.ground, view, w, h, basis);
+      const mag = Math.min(0.58, 0.14 + Math.abs(cell.delta) / 36);
+      const fill = cell.delta < 0 ? `rgba(16,185,129,${mag})` : `rgba(239,68,68,${mag})`;
+      const stroke = cell.delta < 0 ? "rgba(16,185,129,0.95)" : "rgba(239,68,68,0.95)";
+      fillPoly(ctx, projected, fill, stroke, 1.8 * dpr);
+    }
+  }
+
   if (day && elev > 4 && args.lod === 2) {
     for (const mesh of args.meshes) {
       const roofUp = mesh.height;
@@ -538,7 +563,18 @@ function drawFrame(
   const picks: Array<{ id: string; x: number; y: number; depth: number; visible: boolean }> = [];
 
   if (args.lod === 0) {
-    drawDistrictInstances(ctx, args.instanceSlice, view, w, h, basis, dpr, args.now);
+    drawDistrictInstances(
+      ctx,
+      args.instanceSlice,
+      view,
+      w,
+      h,
+      basis,
+      dpr,
+      args.now,
+      args.copilot.highlightIds,
+      args.parentIds,
+    );
   } else {
   const ordered = [...args.meshes].sort((a, b) => {
     const da = projectEnu(a.centroid, view, w, h, basis).depth;
@@ -549,7 +585,8 @@ function drawFrame(
   for (const mesh of ordered) {
     const color = cviColor(cvi.get(mesh.id) ?? 0);
     const highlight = args.selectedId === mesh.id || args.hoveredId === mesh.id;
-    const gold = targeted.has(mesh.id);
+    const dimmed = Boolean(highlightSet && !highlightSet.has(mesh.id));
+    const gold = targeted.has(mesh.id) || (citeRoofs && !dimmed);
     const greedyGhost = windowOnly.has(mesh.id);
     const roofUp = mesh.height;
     const roof = mesh.ground.map((p) => ({ ...p, up: roofUp }));
@@ -615,7 +652,8 @@ function drawFrame(
       } else {
         const [r, g, b] = shadeRgb(color, face.normal, sun, ambient);
         const edge = highlight ? "rgba(34,211,238,0.95)" : gold ? "rgba(251,191,36,0.7)" : "rgba(15,23,42,0.55)";
-        fillPoly(ctx, projected, `rgba(${r},${g},${b},${face.roof ? 0.96 : 0.9})`, edge, highlight ? 2.2 * dpr : 1);
+        const alpha = dimmed ? 0.22 : face.roof ? 0.96 : 0.9;
+        fillPoly(ctx, projected, `rgba(${r},${g},${b},${alpha})`, edge, highlight ? 2.2 * dpr : 1);
         if (args.lod === 2 && !day && !face.roof && projected.length >= 4) {
           ctx.fillStyle = "rgba(255, 214, 130, 0.42)";
           for (let k = 1; k <= 4; k += 1) {

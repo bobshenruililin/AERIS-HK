@@ -13,6 +13,8 @@ import type { MapViewState, PickingInfo } from "@deck.gl/core";
 import { Map as MapLibreMap } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
+import { copilotDiffRgba } from "@/lib/agent";
+import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
 import {
   CARTO_DARK_MATTER_STYLE,
   CVI_COOL_ROOF_LINE,
@@ -86,6 +88,7 @@ export default function AERISMap() {
     forcing,
     setInspectorAnchor,
     cache,
+    copilot,
   } = useSimulation();
   const [viewState, setViewState] = useState<MapViewState>({ ...HARBOUR_APPROACH_VIEW });
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
@@ -147,6 +150,27 @@ export default function AERISMap() {
       } as MapViewState);
     }, 280);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const onLook = (event: Event) => {
+      const detail = (event as CustomEvent<{ lon: number; lat: number }>).detail;
+      if (!detail || !Number.isFinite(detail.lon) || !Number.isFinite(detail.lat)) return;
+      userMoved.current = true;
+      setViewState(
+        (prev) =>
+          ({
+            ...prev,
+            longitude: detail.lon,
+            latitude: detail.lat,
+            zoom: Math.max(prev.zoom ?? KOWLOON_VIEW.zoom, 16.75),
+            transitionDuration: 900,
+            transitionInterpolator: new FlyToInterpolator({ speed: 1.15 }),
+          }) as MapViewState,
+      );
+    };
+    window.addEventListener(TWIN_LOOKAT_EVENT, onLook);
+    return () => window.removeEventListener(TWIN_LOOKAT_EVENT, onLook);
   }, []);
 
   useEffect(() => {
@@ -256,11 +280,48 @@ export default function AERISMap() {
 
   const streaks = useMemo(() => windStreaksFromParticles(particles), [particles]);
   const transferStrokes = useMemo(() => arterialStrokes(snapshot.triage), [snapshot.triage]);
+  const highlightSet = useMemo(() => new Set(copilot.highlightIds), [copilot.highlightIds]);
+  const copilotDiffCollection = useMemo<BuildingFeatureCollection>(() => {
+    const byId = new Map((copilot.diff ?? []).map((cell) => [cell.buildingId, cell]));
+    return {
+      type: "FeatureCollection",
+      crs: { type: "name", properties: { name: "EPSG:4326" } },
+      features: buildings.filter((b) => {
+        const cell = byId.get(b.properties.id);
+        return Boolean(cell && Math.abs(cell.delta) >= 0.05);
+      }).map((b) => {
+        const cell = byId.get(b.properties.id)!;
+        return {
+          ...b,
+          properties: { ...b.properties, delta: cell.delta } as BuildingProperties & { delta: number },
+        };
+      }),
+    };
+  }, [buildings, copilot.diff]);
 
   const cityLayers = useMemo(() => {
     const highlightId = selectedId ?? hoveredId;
     const night = !isDaylight(hour);
     return [
+      new GeoJsonLayer<{ delta: number }>({
+        id: "copilot-diff",
+        data: copilotDiffCollection,
+        extruded: false,
+        filled: true,
+        pickable: false,
+        opacity: 0.88,
+        getFillColor: (f) => copilotDiffRgba(Number((f.properties as { delta?: number }).delta ?? 0)),
+        getLineColor: (f) => {
+          const delta = Number((f.properties as { delta?: number }).delta ?? 0);
+          return delta < 0 ? [16, 185, 129, 230] : [239, 68, 68, 230];
+        },
+        lineWidthMinPixels: 1.6,
+        visible: Boolean(copilot.diff?.length),
+        updateTriggers: {
+          getFillColor: copilot.diff?.length ?? 0,
+          getLineColor: copilot.diff?.length ?? 0,
+        },
+      }),
       new PathLayer({
         id: "street-spines",
         data: lod === 0 ? [] : spines,
@@ -318,7 +379,14 @@ export default function AERISMap() {
         pickable: lod === 2,
         opacity: hudLayers.buildingWireframes ? 0.35 : 0.96,
         getElevation: (f) => packedElevationAt(gpuPack, f?.properties?.id ?? "", hourFloor),
-        getFillColor: (f) => packedColorAt(gpuPack, f?.properties?.id ?? "", hourFloor),
+        getFillColor: (f) => {
+          const id = f?.properties?.id ?? "";
+          const color = packedColorAt(gpuPack, id, hourFloor);
+          if (highlightSet.size > 0 && !highlightSet.has(id)) {
+            return [color[0], color[1], color[2], Math.round(color[3] * 0.28)];
+          }
+          return color;
+        },
         getLineColor: (f) =>
           (f?.properties?.id ?? "") === highlightId
             ? CVI_HOVER_LINE
@@ -336,7 +404,7 @@ export default function AERISMap() {
         },
         extensions: hudLayers.thermalShimmer ? [shimmerExtension] : [],
         updateTriggers: {
-          getFillColor: hourFloor,
+          getFillColor: `${hourFloor}:${copilot.highlightIds.join(",")}`,
           getElevation: hourFloor,
           getAcWatts: hourFloor,
           getLineColor: `${highlightId}:${policy.coolRoofTargetIds.join(",")}`,
@@ -460,6 +528,10 @@ export default function AERISMap() {
     spines,
     focusedHospital,
     hudLayers,
+    copilot.diff,
+    copilot.highlightIds,
+    copilotDiffCollection,
+    highlightSet,
   ]);
 
   const windLayers = useMemo(() => {
