@@ -12,3 +12,7 @@ All notable changes to AERIS-HK are documented here.
 - Client DuckDB-WASM aggregations with in-memory columnar fallback.
 - Deck.gl v9 MapLibre digital twin, canyon wind particles, policy stress-tester, and DH/WHO print briefing.
 - `.cursorrules`, `ROADMAP.md`, and generative concept prompts for stakeholder stills.
+
+### Fixed
+
+- Header briefing control no longer overlaps the telemetry ticker; building HUD only mounts on hover/select.

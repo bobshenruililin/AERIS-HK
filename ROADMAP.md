@@ -11,8 +11,7 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Gagge 2-node thermoregulation, Bishai-style strain, CVI 0–100, 6-hour thermal inertia
 - [x] HA M/M/c surge for CMC, KWH, QEH overflow
 - [x] DuckDB-WASM analytics (district hourly CVI, top-10 critical, policy deltas) with columnar fallback
-- [x] Deck.gl v9 + MapLibre Carto Dark Matter 3D extrusions, wind particles, HUD inspector
-- [x] Diurnal scrubber, policy stress-tester, DH/WHO print briefing, concept prompts
+- [x] Glassmorphism mission control, policy stress-tester, DH/WHO briefing, and browser-verified 3D twin
 
 ## Phase 2 — Live sensing (`/goal` prompts)
 

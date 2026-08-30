@@ -28,7 +28,7 @@ export function PolicyDrawer() {
   }, [impact.admissionsAverted]);
 
   return (
-    <div className="pointer-events-none absolute right-0 top-44 z-20 w-full max-w-sm p-3 md:top-48 md:p-4">
+    <div className="pointer-events-none absolute right-0 top-52 z-20 w-full max-w-sm p-3 md:top-52 md:p-4">
       <GlassPanel>
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
@@ -156,7 +156,7 @@ function ImpactCard({ label, value, sub }: { label: string; value: string; sub: 
   return (
     <div className="rounded-xl border border-cyan-300/15 bg-gradient-to-br from-cyan-400/10 to-transparent px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
-      <div className="font-mono text-lg text-emerald-300">{value}</div>
+      <div className="font-mono text-lg text-emerald-300" data-testid={label.startsWith("24-hr") ? "admissions-averted" : undefined}>{value}</div>
       <div className="text-[10px] text-slate-500">{sub}</div>
     </div>
   );

@@ -11,21 +11,14 @@ export function BuildingInspector() {
   const feature = buildings.find((b) => b.properties.id === id);
 
   if (!feature || !state) {
-    return (
-      <div className="pointer-events-none absolute bottom-36 right-0 z-20 hidden max-w-sm p-3 md:block md:p-4">
-        <GlassPanel>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">Building HUD</div>
-          <p className="mt-1 text-xs text-slate-400">Hover or select a tong lau extrusion to inspect micro-WBGT, inertia and CVD triage tier.</p>
-        </GlassPanel>
-      </div>
-    );
+    return null;
   }
 
   const p = feature.properties;
   const indoorHot = state.indoorTa >= INDOOR_HAZARD_C;
 
   return (
-    <div className="pointer-events-none absolute bottom-36 right-0 z-20 max-w-sm p-3 md:p-4">
+    <div className="pointer-events-none absolute bottom-36 left-1/2 z-20 w-full max-w-md -translate-x-1/2 p-3 md:p-4">
       <GlassPanel>
         <div className="flex items-start justify-between gap-2">
           <div>

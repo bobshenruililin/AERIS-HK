@@ -8,7 +8,7 @@ export function HospitalBoard() {
   const { snapshot } = useSimulation();
 
   return (
-    <div className="pointer-events-none absolute left-0 top-44 z-20 w-full max-w-sm p-3 md:top-48 md:p-4">
+    <div className="pointer-events-none absolute left-0 top-52 z-20 w-full max-w-sm p-3 md:p-4">
       <GlassPanel>
         <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">HA Kowloon West surge</div>
         <h2 className="mb-2 text-sm font-semibold text-white">CMC · KWH · QEH overflow</h2>

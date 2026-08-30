@@ -31,7 +31,7 @@ export function TimeScrubber() {
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </button>
             <div>
-              <div className="font-mono text-lg text-cyan-50">{formatHourLabel(hour)} HKT</div>
+              <div className="font-mono text-lg text-cyan-50" data-testid="sim-hour">{formatHourLabel(hour)} HKT</div>
               <div className="text-[10px] uppercase tracking-widest text-slate-400">
                 24-hour thermal inertia timeline
               </div>

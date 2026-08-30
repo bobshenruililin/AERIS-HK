@@ -8,6 +8,7 @@ import { hkoStatusLabel } from "@/lib/epidemiology-engine";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
 import { solarElevationDeg } from "@/lib/solar";
+import { ExportReport } from "@/components/ui/ExportReport";
 
 export function Header() {
   const { snapshot, analytics, hour } = useSimulation();
@@ -52,8 +53,11 @@ export function Header() {
               </p>
             </div>
           </div>
-          <div className={`rounded-full border px-3 py-1 text-[11px] font-medium ${badge}`}>
-            {label.zh} · {label.en}
+          <div className="flex flex-wrap items-center gap-2">
+            <ExportReport />
+            <div className={`rounded-full border px-3 py-1 text-[11px] font-medium ${badge}`}>
+              {label.zh} · {label.en}
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">

@@ -233,9 +233,14 @@ export async function runAerisAnalytics(args: {
   const conn = await db.connect();
   try {
     await conn.query("DROP TABLE IF EXISTS building_hours");
+    try {
+      await db.dropFile("building_hours.json");
+    } catch {
+      // First ingest has no prior Arrow/JSON file handle.
+    }
     await db.registerFileText("building_hours.json", JSON.stringify(rows));
     await conn.query(
-      `CREATE TABLE building_hours AS SELECT * FROM read_json_auto('building_hours.json')`,
+      `CREATE OR REPLACE TABLE building_hours AS SELECT * FROM read_json_auto('building_hours.json')`,
     );
     const queried = await queryDuckDb(conn, args.hour);
     return {
