@@ -20,6 +20,16 @@ type AsyncDuckDBConnection = import("@duckdb/duckdb-wasm").AsyncDuckDBConnection
 let duckdbMod: DuckDbModule | null = null;
 let dbSingleton: AsyncDuckDB | null = null;
 let initPromise: Promise<AsyncDuckDB | null> | null = null;
+let ingestQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueDuckDb<T>(fn: () => Promise<T>): Promise<T> {
+  const next = ingestQueue.then(fn, fn);
+  ingestQueue = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
 
 function assertBrowser(): void {
   if (typeof window === "undefined" || typeof Worker === "undefined") {
@@ -132,21 +142,38 @@ async function ingestIpcTable(
   fileName: string,
   ipc: Uint8Array,
 ): Promise<void> {
-  await conn.query(`DROP TABLE IF EXISTS ${name}`);
+  const { tableFromIPC, tableToIPC } = await import("apache-arrow");
+  const table = tableFromIPC(ipc);
+  const stream = tableToIPC(table, "stream");
+
+  const drop = async () => {
+    await conn.query(`DROP TABLE IF EXISTS ${name}`);
+  };
+
+  await drop();
   try {
-    const { tableFromIPC } = await import("apache-arrow");
-    await conn.insertArrowTable(tableFromIPC(ipc), { name, create: true });
+    await conn.insertArrowFromIPCStream(stream, { name, create: true });
     return;
   } catch (error) {
-    console.warn(`[AERIS-HK] insertArrowTable(${name}) failed; trying read_ipc.`, error);
+    console.warn(`[AERIS-HK] insertArrowFromIPCStream(${name}) failed; trying insertArrowTable.`, error);
   }
+
+  await drop();
+  try {
+    await conn.insertArrowTable(table, { name, create: true });
+    return;
+  } catch (error) {
+    console.warn(`[AERIS-HK] insertArrowTable(${name}) failed; trying Arrow file scan.`, error);
+  }
+
+  await drop();
   try {
     await db.dropFile(fileName);
   } catch {
     // First ingest has no prior Arrow file handle.
   }
   await db.registerFileBuffer(fileName, ipc);
-  await conn.query(`CREATE TABLE ${name} AS SELECT * FROM read_ipc('${fileName}')`);
+  await conn.query(`CREATE TABLE ${name} AS SELECT * FROM '${fileName}'`);
 }
 
 async function countRows(conn: AsyncDuckDBConnection, table: string): Promise<number> {
@@ -236,6 +263,16 @@ async function queryDuckDb(
 }
 
 export async function runAerisAnalytics(args: {
+  buildings: BuildingFeature[];
+  hourly: BuildingHourState[];
+  hour: number;
+  policy: PolicyState;
+  footprintsIpc?: Uint8Array | null;
+}): Promise<DuckDbQueryBundle> {
+  return enqueueDuckDb(() => runAerisAnalyticsExclusive(args));
+}
+
+async function runAerisAnalyticsExclusive(args: {
   buildings: BuildingFeature[];
   hourly: BuildingHourState[];
   hour: number;
