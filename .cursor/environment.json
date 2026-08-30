@@ -1,0 +1,15 @@
+{
+  "name": "AERIS-HK",
+  "install": "python3 -c 'import ensurepip' >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y python3.12-venv; }\npython3 -m venv .venv\n.venv/bin/python -m pip install --upgrade pip\n.venv/bin/python -m pip install -r requirements-dev.txt\nnpm install --legacy-peer-deps",
+  "terminals": [
+    {
+      "name": "api",
+      "command": ".venv/bin/python -m aeris_hk.main"
+    },
+    {
+      "name": "twin",
+      "command": "npm run dev"
+    }
+  ],
+  "ports": [8000, 3000]
+}

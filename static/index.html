@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AERIS-HK · Atmospheric &amp; Epidemiological Risk</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌫️</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">AERIS<span>·HK</span></div>
+      <div class="tagline">Atmospheric &amp; Epidemiological Risk Inference System — Hong Kong</div>
+    </div>
+    <div class="controls">
+      <label for="date">Date</label>
+      <input type="date" id="date" />
+      <button id="refresh" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="cards" id="summary-cards" aria-live="polite">
+      <div class="card skeleton"></div>
+      <div class="card skeleton"></div>
+      <div class="card skeleton"></div>
+      <div class="card skeleton"></div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>District risk ranking</h2>
+          <span class="hint">Click a district for its 30-day trend</span>
+        </div>
+        <div id="district-list" class="district-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="detail-title">District detail</h2>
+          <span class="hint" id="detail-sub">Select a district</span>
+        </div>
+        <div id="detail" class="detail">
+          <p class="empty">No district selected yet.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>AERIS-HK</span> · risk indices are model estimates from synthetic data and are not clinical or public-health advice.
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

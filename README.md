@@ -1,57 +1,175 @@
 # AERIS-HK
 
-**Atmospheric & Epidemiological Risk Inference System — Hong Kong**  
-氣候與流行病空間推演系統
+**Atmospheric & Epidemiological Risk Intelligence System — Hong Kong**
 
-Aerospace-grade urban microclimate digital twin and Hospital Authority cardiovascular surge engine for Sham Shui Po and Yau Tsim Mong subdivided-flat (*tong lau*) districts.
+A dual-scale research platform: an 18-district territory air/epidemiological **risk index** (FastAPI) and a Kowloon West **planetary digital twin** (Next.js) that couples first-principles biophysics, Hospital Authority surge queuing, and GPU/CPU geospatial rendering. Neither layer is a toy dashboard. Together they form a whitepaper-grade system of record for heat, air, and bed-capacity stress under Hong Kong’s humid-subtropical climate.
 
-## Stack
+```
+                    ┌─────────────────────────────────────┐
+                    │         Operator / researcher       │
+                    └──────────────┬──────────────────────┘
+           ┌───────────────────────┴───────────────────────┐
+           ▼                                               ▼
+ ┌─────────────────────┐                       ┌─────────────────────────┐
+ │ Territory index     │                       │ Kowloon West twin       │
+ │ FastAPI :8000       │                       │ Next.js App Router :3000│
+ │ 18 DC districts     │                       │ 168 CityJSON footprints │
+ │ PM2.5 · NO₂ · O₃    │                       │ Deck.gl / TwinCanvas    │
+ │ ILI · respiratory   │                       │ Gagge · Fanger · WBGT   │
+ │ susceptibility amp. │                       │ M/M/c · Monte Carlo     │
+ └─────────────────────┘                       └───────────┬─────────────┘
+                                                           │
+                    ┌──────────────────────────────────────┼──────────────┐
+                    ▼                                      ▼              ▼
+            Neon Postgres                          DuckDB-WASM      Spatial grid
+            Drizzle ORM                            Arrow IPC        typed arrays
+            ?sim=uuid share                        window SQL       bbox < 10 ms
+```
 
-- Next.js 14 App Router, TypeScript, Tailwind CSS
-- Deck.gl v9 + MapLibre (Carto Dark Matter) when a GPU is present; otherwise a software ENU twin (Canvas2D) with the same cool-roof / plume / catchment story
-- PostGIS (EPSG:2326 authority, dual-write EPSG:4326) with Arrow IPC snapshots for DuckDB-WASM
-- First-principles Gagge 2-node + CVI + M/M/c (CMC, KWH, QEH)
-- Live HKO Open Data (`/api/hko/envelope`) for Kowloon T/RH, WHOT, and 9-day forecast anchors
-- Anonymised HA A&E nowcast (`/api/ha/nowcast`) — hospital aggregates only; M/M/c μ/c from Cat 1–3 mix
-- Cool-roof targeting optimiser — exact 0/1 knapsack on m² budget (DuckDB window rank) maximising 24-hour admissions averted
-- Decade observatory — replay 2016–2026 heat summers, Neon episode archive, knapsack ensemble band
+This is **not** an official HKO, HA, or HKSAR product. Forecasts, queues, and risk scores are research estimators.
+
+---
+
+## Dual-scale architecture
+
+### 1. Territory risk index (`aeris_hk/`)
+
+A FastAPI service over Hong Kong’s 18 District Council districts. Each district carries:
+
+| Layer | Meaning |
+| --- | --- |
+| Air | 0.55·PM2.5 + 0.25·NO₂ + 0.20·O₃, each scaled to WHO-order references |
+| Epi | 0.6·ILI + 0.4·respiratory admissions |
+| Susceptibility | log₁₀ population density between ~1k and ~60k / km² |
+
+Composite (see `aeris_hk/model.py`):
+
+\[
+\text{amplifier} = 1 + 0.2\cdot\text{susceptibility}
+\]
+
+\[
+\text{risk} = 100\cdot\mathrm{clamp}\bigl(\text{amplifier}\cdot(0.50\cdot\text{air} + 0.35\cdot\text{epi} + 0.15\cdot\text{susceptibility})\bigr)
+\]
+
+Bands: **Low** `[0,25)`, **Moderate** `[25,50)`, **High** `[50,75)`, **Very High** `[75,100]`.
+
+APIs: `GET /api/health`, `GET /api/districts`, `GET /api/risk`, `GET /api/risk/{id}`, `GET /api/summary`. UI at `/`. Tests: `python3 -m pytest tests/`.
+
+### 2. Kowloon West planetary twin (`app/`, `lib/`, `components/`)
+
+A Next.js 14 App Router twin of Sham Shui Po / Yau Tsim Mong. Default renderer is a **software ENU TwinCanvas** (deterministic, CI-safe). Optional GPU Deck.gl is gated by `?gpu=1` **and** a healthy WebGL2 context.
+
+Authoritative CRS: **HK1980 Grid (EPSG:2326)** on `properties.hk80` and PostGIS `geom_hk80`. WGS84 (EPSG:4326) is derived exclusively via `lib/crs.ts` (Helmert TOWGS84 + International 1924 TM). Deck.gl `getPosition` is **never** fed HK80 eastings. The software twin projects WGS84 → local ENU metres (`lib/twin-camera.ts`) for display only.
+
+**Cloud tier — Neon Serverless Postgres + Drizzle ORM**
+
+- Tables: `buildings`, `simulation_runs`, `hourly_cluster_metrics` (`lib/db/schema.ts`).
+- HTTP driver for serverless routes; WebSocket `postgres` pool for seed (`lib/db/http.ts`, `lib/db/client.ts`).
+- Shareable URLs: `/?sim=<uuid>` hydrates the HUD from `simulation_runs.config`.
+- Seed: `npm run db:seed` writes 168 Kowloon West footprints as GeoJSON polygons.
+
+**Client tier — DuckDB-WASM + Apache Arrow IPC + spatial hash**
+
+- `lib/duckdb-engine.ts` registers Arrow tables (`lib/arrow-ipc.ts`) and runs window-function knapsack SQL.
+- `lib/spatial-grid.ts` is a typed-array uniform grid over ENU metres: bbox / kNN over tens of thousands of urban vectors in **sub-10 ms** on the main thread (see `SYSTEM_INTELLIGENCE.md`).
+- `lib/cityjson.ts` emits CityJSON 2.0 `Building` objects from the same footprints.
+
+**Geospatial patterns**
+
+- Kepler.gl-style **instancing**: packed `Float32Array` colours / elevations / AC watts (`lib/gpu-attributes.ts`).
+- Uber **H3** resolution 9 / 10 hex aggregation (`lib/h3-index.ts`), drawn as GeoJSON (not `@deck.gl/geo-layers` — that barrel pulls `mesh-layers` and breaks the Next 14 webpack build).
+- **CityJSON**-shaped building records: `id`, `height_m`, `year_built`, `storeys`, `typology`, `footprint` rings.
+
+---
+
+## First-principles physics (twin)
+
+| Model | Identity / solver | Module |
+| --- | --- | --- |
+| Gagge two-node | \(S = M - W - E - R - C\) | `lib/thermal-engine.ts` |
+| Fanger PMV–PPD | ISO 7730, Newton \(T_{cl}\) | `lib/biophysics.ts` |
+| WBGT | Liljegren-class iteration | `lib/biophysics.ts` |
+| 劏房 4 h battery | Night-only Euler, \(\tau=4\,\mathrm{h}\) | `lib/biophysics.ts` |
+| Street-canyon / Tong Lau | Aspect \(H/W\), Oke SVF, thermal inertia | `lib/canyon.ts` |
+| NOAA SPA solar | \(\gamma_s, \alpha_s\) at 22.3193°N, 114.1694°E | `lib/solar-engine.ts` |
+| Venturi wind | Continuity squeeze in alleys | `lib/wind-field.ts` |
+| CVI | WBGT × elderly × density × blockage | `lib/epidemiology-engine.ts` |
+| M/M/c | Erlang-C wait, ρ, 8-hour overflow | `lib/epidemiology-engine.ts` |
+| Monte Carlo | 1,000 draws, 95% CI on HA beds | `lib/monte-carlo.ts` |
+| Cool-roof knapsack | DuckDB `SUM() OVER` + 0/1 DP | `lib/duckdb-engine.ts` |
+
+Hospital Authority clusters in the twin: **CMC** (Caritas Medical Centre), **KWH** (Kwong Wah), **QEH** (Queen Elizabeth). Live HKO / HA pollers remain on 60 s / 5 min cadences.
+
+---
+
+## Progressive disclosure HUD (zero deletions)
+
+Interface density is solved with aerospace / VisionOS glass — **not** by removing sliders or metrics.
+
+- **Command palette** (`⌘K` / `Ctrl+K`): streets, districts, DB snapshots, scenarios.
+- **Control Dock** (bottom pill): layers, playbar, Jul 2022 / Typhoon / Blackout, Share `?sim=`.
+- **Pinned ENU telemetry** on building pick; inspector tabs Thermal / Demographic / A&E Surge (Cat 1–3).
+- **Cinematic orbital camera** on TwinCanvas (Control Dock → Orbit).
+- Presets **1–4**, decade observatory, GPU overlay, Monte Carlo chart — all retained.
+
+---
 
 ## Quick start
 
+### Planetary twin (port 3000)
+
 ```bash
-npm install
-npm run dev
+npm install --legacy-peer-deps
+cp .env.example .env.local   # NEON_DATABASE_URL
+npx drizzle-kit push
+npm run db:seed
+npm run dev                  # http://127.0.0.1:3000
+npm run build && PORT=3000 npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The map is a software ENU twin (Canvas2D) so the city is visible without WebGL. Append `?gpu=1` to mount Deck.gl + MapLibre when a healthy WebGL2 GPU is present.
+`npm install` without `--legacy-peer-deps` fails (Mapbox / Deck.gl peer range).
+
+### Territory index (port 8000)
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 -m aeris_hk.main     # http://127.0.0.1:8000
+python3 -m pytest tests/
+```
+
+### Gates (twin)
+
+```bash
+npx tsc --noEmit
+npm run test:crs && npm run test:ha && npm run test:cool-roof
+npm run test:twin && npm run test:decade && npm run test:solar
+npm run test:mc && npm run test:scenarios && npm run test:bio
+npm run test:h3 && npm run test:db
 npm run build
-npm run ingest:hk80
-npm run test:crs
-npm run test:ha
-npm run test:cool-roof
-npm run test:twin
-npm run test:decade
 ```
 
-PostGIS (HK80 / EPSG:2326) is the footprint authority. Either run a local cluster or:
+---
 
-```bash
-docker compose up -d postgis
-npm run ingest:hk80
-```
+## Repository map
 
-Default `DATABASE_URL` is `postgres://aeris:aeris@127.0.0.1:5432/aeris`. The app publishes GeoJSON 4326 at `/api/spatial/buildings` (Deck.gl) and Arrow IPC at `/api/spatial/footprints` (DuckDB-WASM).
+| Path | Role |
+| --- | --- |
+| `aeris_hk/` | FastAPI territory index |
+| `static/` | District choropleth UI |
+| `tests/` | Python pytest suite |
+| `app/` | Next.js App Router + `/api/simulations` |
+| `lib/` | CRS, physics, Neon, DuckDB, H3, GPU |
+| `components/` | TwinCanvas, Deck overlay, HUD, dock |
+| `scripts/` | Seed, neon ping, DuckDB bench |
+| `drizzle/` | SQL migrations |
+| `SYSTEM_INTELLIGENCE.md` | Formulas, CRS, SSR, measured benches |
+| `CHANGELOG.md` / `ROADMAP.md` | Leaves and remaining work |
 
-The wait board is [HA Open Data](https://www.ha.org.hk/opendata/aed/aedwtdata2-en.json) (updated ~15 min). Occupancy is a delayed CMS-style aggregate mock (plus optional `POST /api/ha/ingest` webhook of hospital-level rates). **No patient identifiers.**
+---
 
-## CRS
+## Licence & disclaimer
 
-**Store** building polygons in PostGIS as `geom_hk80 geometry(Polygon, 2326)`. A trigger dual-writes `geom_wgs84 geometry(Polygon, 4326)` via `ST_Transform` for Deck.gl. Client conversions also live in `lib/crs.ts` (International 1924 TM + EPSG:2326 Helmert). Never pass eastings to Deck.gl `getPosition`.
-
-Migration: `scripts/ingest-hk80.sql`. Round-trip tests: `npm run test:crs`.
-
-## Disclaimer
-
-Phase 1–2 morphology is a synthetic tong lau twin stored in PostGIS (HK80). Meteorology is live HKO Open Data. A&E waits are HA Open Data hospital aggregates. It is **not** an official Hong Kong Observatory or Hospital Authority product.
+Research software. Do not treat outputs as clinical, meteorological, or statutory advice.
