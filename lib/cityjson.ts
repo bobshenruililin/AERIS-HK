@@ -53,7 +53,7 @@ export function buildingsToCityJson(buildings: BuildingFeature[]): CityJsonDocum
   const CityObjects: Record<string, CityJsonBuilding> = {};
   let minE = Infinity;
   let minN = Infinity;
-  let minZ = 0;
+  const minZ = 0;
   let maxE = -Infinity;
   let maxN = -Infinity;
   let maxZ = 0;

@@ -42,7 +42,18 @@ The software twin is the default verified picture (WGS84 → ENU metres). Deck.g
 
 Packed GPU buffers for the live twin: `168 × 24 × 4` RGBA bytes + `168 × 24` elevations + AC-watt attributes, swapped by hour floor without rebuilding GeoJSON.
 
-## 4. Gates
+## 4. ENU spatial hash (sub-10 ms)
+
+Typed-array uniform grid (`lib/spatial-grid.ts`), 40 m cells, 50,000 densified urban vectors (Node `tsx`, this VM):
+
+| Probe | p50 (ms) | Min (ms) |
+| --- | ---: | ---: |
+| bbox (−700…900 E, −1100…700 N, CVI ≥ 70) | **6.34** | 2.81 |
+| kNN k=16 at origin | **0.11** | 0.09 |
+
+`npm run test:spatial` asserts both p50 < 10 ms. Live HUD indexes 24,000 vectors and prints timings on the mission ticker.
+
+## 5. Gates
 
 | Gate | Evidence |
 | --- | --- |

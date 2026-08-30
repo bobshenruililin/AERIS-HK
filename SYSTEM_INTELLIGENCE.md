@@ -201,9 +201,15 @@ Prior night (`BENCHMARK_REPORT.md`, Neon pooler awake):
 | `projectEnu` 1080p, 90 frames | mean 0.33 ms, p95 0.88 ms |
 | Headless TwinCanvas rAF | ~30 FPS (compositor cap) |
 
-SpatialGrid 50,000 ENU vectors (this revision; `npm run test:spatial` /
-`scripts/benchmark.ts`): bbox and kNN **p50 must be < 10 ms**. Live HUD
-uses 24,000 vectors (`URBAN_VECTOR_TARGET`).
+SpatialGrid 50,000 ENU vectors (this revision, Node `tsx` on the Cloud Agent VM):
+
+| Probe | p50 | Min |
+| --- | ---: | ---: |
+| bbox (−700…900 E, −1100…700 N, CVI ≥ 70) | **6.34 ms** | 2.81 ms |
+| kNN k=16 at origin | **0.11 ms** | 0.09 ms |
+| cells | 238 | — |
+
+Live HUD uses 24,000 vectors (`URBAN_VECTOR_TARGET`). Both probes are under the 10 ms north-star.
 
 Gates: `npx tsc --noEmit`, `npm run build`, the `test:*` scripts including
 `test:spatial`, and `python3 -m pytest tests/` for the territory index.
