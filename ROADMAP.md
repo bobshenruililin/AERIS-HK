@@ -13,13 +13,15 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] DuckDB-WASM analytics (district hourly CVI, top-10 critical, policy deltas) with columnar fallback
 - [x] Glassmorphism mission control, policy stress-tester, DH/WHO briefing, and browser-verified 3D twin
 
-## Phase 2 — Live sensing (`/goal` prompts)
+## Phase 2 — Live sensing
 
-Copy-paste these into a new agent once Phase 1 is on `main`.
+### `/goal` HKO Open Data webhook (complete)
 
-### `/goal` HKO Open Data webhook
-
-Ingest live HKO temperature, humidity, and Very Hot Weather Warning from `data.weather.gov.hk`. Replace synthetic diurnal forcing in `lib/epidemiology-engine.ts` with a rolling 24-hour observed + forecast envelope. Keep SSR-safe fetch in a Route Handler; client remains DuckDB + Deck.gl.
+- [x] SSR-safe Route Handlers `GET /api/hko/envelope` and `POST /api/hko/ingest`
+- [x] Pull HKO rhrread (T/RH), 1-minute AWS CSV (Sham Shui Po / King's Park), warnsum WHOT, 9-day FND
+- [x] Rolling 24-hour observed + forecast envelope replaces synthetic T/RH sinusoids in `lib/epidemiology-engine.ts`
+- [x] Client remains DuckDB-WASM + Deck.gl; meteorology arrives as JSON from the Route Handler
+- [x] Official WHOT drives the HUD badge; canyon WBGT remains an AERIS overlay
 
 ### `/goal` PostGIS HK80 synchronization
 
@@ -39,3 +41,4 @@ Given a budget (m² of albedo retrofit), select the building set that maximises 
 - [ ] Traditional Chinese screen-reader pass and WCAG contrast on glass panels
 - [ ] Automated visual regression of the Kowloon view state
 - [ ] GPU particle layer (WebGPU compute) if ScatterplotLayer saturates at 60 FPS
+- [ ] Durable observation store (Postgres/Redis) for the HKO ring buffer across serverless cold starts

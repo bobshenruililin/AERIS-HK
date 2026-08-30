@@ -21,16 +21,13 @@ import { HOSPITALS, type HospitalSpec } from "./hospitals";
 import { solarRadiationIndex } from "./solar";
 import { clamp, lerp, wrapHour } from "./utils";
 import { getBuildings } from "./spatial-data";
+import type { HkoDiurnalEnvelope } from "./hko/types";
+import { sampleHkoEnvelope } from "./hko/envelope";
 
 const STEFAN_LINEAR_HR = 4.7;
 const LEWIS_RATIO = 16.5;
 const SKIN_WETTED_MAX = 0.85;
 const MET_RESTING = 58;
-const T_MEAN = 32.05;
-const T_AMP = 3.15;
-const T_PEAK_HOUR = 15.05;
-const RH_MIN = 0.62;
-const RH_MAX = 0.86;
 
 function satVaporKpa(tempC: number): number {
   return 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
@@ -47,17 +44,23 @@ function stullWetBulb(ta: number, rhFrac: number): number {
   );
 }
 
-function relativeHumidity(hour: number): number {
+function relativeHumidity(hour: number, envelope: HkoDiurnalEnvelope | null): number {
+  if (envelope) {
+    return clamp(sampleHkoEnvelope(envelope, hour).rhFrac, 0.25, 0.99);
+  }
   const h = wrapHour(hour);
   const nightBoost = 0.5 + 0.5 * Math.cos(((h - 4) * Math.PI) / 12);
-  return clamp(RH_MIN + (RH_MAX - RH_MIN) * nightBoost, 0.4, 0.95);
+  return clamp(0.7 + 0.12 * nightBoost, 0.4, 0.95);
 }
 
-function regionalAirTemp(hour: number, coolRoofPercent: number): number {
+function regionalAirTemp(hour: number, coolRoofPercent: number, envelope: HkoDiurnalEnvelope | null): number {
   const h = wrapHour(hour);
-  const cosine = Math.cos((2 * Math.PI * (h - T_PEAK_HOUR)) / 24);
   const roofCool = 1.15 * (coolRoofPercent / 50);
-  return T_MEAN - roofCool * 0.55 + (T_AMP - roofCool * 0.45) * cosine;
+  if (envelope) {
+    return sampleHkoEnvelope(envelope, h).airTempC - roofCool * 0.55;
+  }
+  const cosine = Math.cos((2 * Math.PI * (h - 15.05)) / 24);
+  return 29.2 - roofCool * 0.55 + (2.4 - roofCool * 0.45) * cosine;
 }
 
 function effectiveAcHeat(building: BuildingFeature, policy: PolicyState): number {
@@ -70,8 +73,13 @@ export function thermalLagHours(building: BuildingFeature, policy: PolicyState):
   return 6 * building.properties.subdividedFlatDensity * (effectiveAcHeat(building, policy) / 180);
 }
 
-function canyonAirTemp(hour: number, building: BuildingFeature, policy: PolicyState): number {
-  const regional = regionalAirTemp(hour, policy.coolRoofPercent);
+function canyonAirTemp(
+  hour: number,
+  building: BuildingFeature,
+  policy: PolicyState,
+  envelope: HkoDiurnalEnvelope | null,
+): number {
+  const regional = regionalAirTemp(hour, policy.coolRoofPercent, envelope);
   const ac = effectiveAcHeat(building, policy);
   const canyon =
     1.55 * building.properties.ventilationBlockage +
@@ -86,10 +94,15 @@ function nightShelterRelief(hour: number, policy: PolicyState): number {
   return (policy.coolingShelters / 30) * 0.46 * clamp(night, 0, 1);
 }
 
-export function indoorAirTemp(hour: number, building: BuildingFeature, policy: PolicyState): number {
+export function indoorAirTemp(
+  hour: number,
+  building: BuildingFeature,
+  policy: PolicyState,
+  envelope: HkoDiurnalEnvelope | null = null,
+): number {
   const lag = thermalLagHours(building, policy);
-  const laggedCanyon = canyonAirTemp(hour - lag, building, policy);
-  const liveCanyon = canyonAirTemp(hour, building, policy);
+  const laggedCanyon = canyonAirTemp(hour - lag, building, policy, envelope);
+  const liveCanyon = canyonAirTemp(hour, building, policy, envelope);
   const trap =
     2.55 * building.properties.subdividedFlatDensity +
     0.012 * effectiveAcHeat(building, policy) +
@@ -117,6 +130,7 @@ export function gaggeTwoNode(
   policy: PolicyState,
   indoorTa: number,
   outdoorTa: number,
+  envelope: HkoDiurnalEnvelope | null = null,
 ): BuildingHourState["gagge"] {
   const h = wrapHour(hour);
   const elderlyMet = lerp(1.0, 0.86, building.properties.elderlyRatio);
@@ -131,7 +145,7 @@ export function gaggeTwoNode(
   const Tr = globeTemp(indoorTa, h, building.properties.ventilationBlockage);
   const C = hc * (Tsk - indoorTa);
   const R = STEFAN_LINEAR_HR * (Tsk - Tr);
-  const rh = relativeHumidity(h);
+  const rh = relativeHumidity(h, envelope);
   const Pa = rh * satVaporKpa(indoorTa);
   const Psk = satVaporKpa(Tsk);
   const he = LEWIS_RATIO * hc;
@@ -204,10 +218,11 @@ export function evaluateBuildingAtHour(
   building: BuildingFeature,
   hour: number,
   policy: PolicyState,
+  envelope: HkoDiurnalEnvelope | null = null,
 ): BuildingHourState {
-  const outdoorTa = canyonAirTemp(hour, building, policy);
-  const indoorTa = indoorAirTemp(hour, building, policy);
-  const rh = relativeHumidity(hour);
+  const outdoorTa = canyonAirTemp(hour, building, policy, envelope);
+  const indoorTa = indoorAirTemp(hour, building, policy, envelope);
+  const rh = relativeHumidity(hour, envelope);
   const twOut = stullWetBulb(outdoorTa, rh);
   const twIn = stullWetBulb(indoorTa, Math.min(0.92, rh + 0.04));
   const tgOut = globeTemp(outdoorTa, hour, building.properties.ventilationBlockage);
@@ -215,7 +230,7 @@ export function evaluateBuildingAtHour(
   const canyonWbgt = wbgtOutdoor(outdoorTa, twOut, tgOut);
   const indoorWbgt = wbgtIndoor(indoorTa, twIn, tgIn);
   const microWbgt = 0.68 * indoorWbgt + 0.32 * canyonWbgt;
-  const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa);
+  const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa, envelope);
   const cvi = buildingCardiovascularIndex(microWbgt, building, policy);
   return {
     buildingId: building.properties.id,
@@ -276,16 +291,17 @@ export function evaluateBuildingInterpolated(
   hour: number,
   policy: PolicyState,
   cache?: Map<string, BuildingHourState>,
+  envelope: HkoDiurnalEnvelope | null = null,
 ): BuildingHourState {
   const h = wrapHour(hour);
   const h0 = Math.floor(h);
   const h1 = (h0 + 1) % 24;
   const t = h - h0;
   if (t < 1e-6) {
-    return cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy);
+    return cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope);
   }
-  const a = cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy);
-  const b = cache?.get(`${building.properties.id}:${h1}`) ?? evaluateBuildingAtHour(building, h1, policy);
+  const a = cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope);
+  const b = cache?.get(`${building.properties.id}:${h1}`) ?? evaluateBuildingAtHour(building, h1, policy, envelope);
   return interpolateBuildingState(a, b, t, h);
 }
 
@@ -425,13 +441,28 @@ export function inferHkoHeatStatus(meanWbgt: number, meanOutdoorTa: number): Hko
   return "NORMAL";
 }
 
+export function resolveHeatStatus(
+  meanWbgt: number,
+  meanOutdoorTa: number,
+  envelope: HkoDiurnalEnvelope | null,
+): HkoHeatStatus {
+  const analogue = inferHkoHeatStatus(meanWbgt, meanOutdoorTa);
+  if (!envelope) return analogue;
+  if (envelope.warning.veryHotWeatherWarning) {
+    return analogue === "NORMAL" ? "VERY_HOT_WEATHER_WARNING" : analogue;
+  }
+  if (analogue === "VERY_HOT_WEATHER_WARNING") return "NORMAL";
+  return analogue;
+}
+
 export function evaluateSystemAtHour(
   hour: number,
   policy: PolicyState,
   buildings: BuildingFeature[] = getBuildings(),
   cache?: Map<string, BuildingHourState>,
+  envelope: HkoDiurnalEnvelope | null = null,
 ): SystemHourSnapshot {
-  const buildingStates = buildings.map((b) => evaluateBuildingInterpolated(b, hour, policy, cache));
+  const buildingStates = buildings.map((b) => evaluateBuildingInterpolated(b, hour, policy, cache, envelope));
   const hospitals = HOSPITALS.map((spec) => evaluateHospital(spec, hour, buildingStates, buildings, policy));
   const regionalMeanWbgt =
     buildingStates.reduce((s, b) => s + b.microWbgt, 0) / Math.max(1, buildingStates.length);
@@ -448,7 +479,7 @@ export function evaluateSystemAtHour(
     hospitals,
     regionalMeanWbgt,
     regionalMeanCvi,
-    hkoStatus: inferHkoHeatStatus(regionalMeanWbgt, meanOutdoor),
+    hkoStatus: resolveHeatStatus(regionalMeanWbgt, meanOutdoor, envelope),
     clusterBedStress,
     totalCat13Arrivals,
   };
@@ -457,11 +488,12 @@ export function evaluateSystemAtHour(
 export function precomputeHourlyCache(
   policy: PolicyState,
   buildings: BuildingFeature[] = getBuildings(),
+  envelope: HkoDiurnalEnvelope | null = null,
 ): Map<string, BuildingHourState> {
   const cache = new Map<string, BuildingHourState>();
   for (const building of buildings) {
     for (let hour = 0; hour < 24; hour += 1) {
-      cache.set(`${building.properties.id}:${hour}`, evaluateBuildingAtHour(building, hour, policy));
+      cache.set(`${building.properties.id}:${hour}`, evaluateBuildingAtHour(building, hour, policy, envelope));
     }
   }
   return cache;
@@ -470,9 +502,10 @@ export function precomputeHourlyCache(
 export function computePolicyImpact(
   policy: PolicyState,
   buildings: BuildingFeature[] = getBuildings(),
+  envelope: HkoDiurnalEnvelope | null = null,
 ): PolicyImpact {
-  const baselineCache = precomputeHourlyCache(BASELINE_POLICY, buildings);
-  const scenarioCache = precomputeHourlyCache(policy, buildings);
+  const baselineCache = precomputeHourlyCache(BASELINE_POLICY, buildings, envelope);
+  const scenarioCache = precomputeHourlyCache(policy, buildings, envelope);
   let baselineAdmissions24h = 0;
   let scenarioAdmissions24h = 0;
   let baselineMort = 0;
@@ -481,8 +514,8 @@ export function computePolicyImpact(
   let scenarioDef = 0;
 
   for (let hour = 0; hour < 24; hour += 1) {
-    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache);
-    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache);
+    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope);
+    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope);
     baselineAdmissions24h += base.totalCat13Arrivals;
     scenarioAdmissions24h += scen.totalCat13Arrivals;
     const baseMort = base.hospitals.reduce((s, h) => s + h.relativeMortalityIndex, 0) / 3;

@@ -189,3 +189,5 @@ export const DEFAULT_POLICY: PolicyState = {
   coolRoofPercent: 8,
   acDeflectionBylaw: false,
 };
+
+export type { HkoDiurnalEnvelope } from "./hko/types";

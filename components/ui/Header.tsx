@@ -11,10 +11,13 @@ import { solarElevationDeg } from "@/lib/solar";
 import { ExportReport } from "@/components/ui/ExportReport";
 
 export function Header() {
-  const { snapshot, analytics, hour } = useSimulation();
+  const { snapshot, analytics, hour, envelope, envelopeError } = useSimulation();
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const elev = solarElevationDeg(hour);
   const bedPct = snapshot.clusterBedStress * 100;
+  const ssp = envelope?.stations.find((s) => s.name === "Sham Shui Po");
+  const kp = envelope?.stations.find((s) => s.name === "King's Park");
+  const officialWhot = envelope?.warning.veryHotWeatherWarning ?? false;
   const badge =
     snapshot.hkoStatus === "SPECIAL_HEAT_STRESS_BLACK"
       ? "bg-red-500/20 text-red-200 border-red-400/40"
@@ -25,11 +28,22 @@ export function Header() {
           : "bg-emerald-500/20 text-emerald-100 border-emerald-400/40";
 
   const ticker = [
-    `HKO ${label.en} / ${label.zh}`,
+    officialWhot
+      ? `HKO WHOT IN FORCE · ${envelope?.warning.nameZh}`
+      : `HKO WHOT inactive · ${envelope?.warning.nameZh ?? "酷熱天氣警告未發出"}`,
+    envelope
+      ? `Kowloon T ${envelope.kowloonAirTempC.toFixed(1)}°C · RH ${(envelope.kowloonRhFrac * 100).toFixed(0)}%`
+      : envelopeError
+        ? `HKO ingest error: ${envelopeError}`
+        : "HKO envelope ingest…",
+    ssp?.airTempC != null ? `SSP ${ssp.airTempC.toFixed(1)}°C` : "SSP pending",
+    kp?.airTempC != null ? `KP ${kp.airTempC.toFixed(1)}°C` : "KP pending",
+    envelope?.forecast
+      ? `FND ${envelope.forecast.date} ${envelope.forecast.minTempC}–${envelope.forecast.maxTempC}°C`
+      : "FND pending",
     `Regional mean micro-WBGT ${snapshot.regionalMeanWbgt.toFixed(1)}°C`,
     `Kowloon West + overflow bed stress ${bedPct.toFixed(1)}%`,
     `Cluster CVI ${snapshot.regionalMeanCvi.toFixed(1)}`,
-    `Cat 1–3 arrival rate ${snapshot.totalCat13Arrivals.toFixed(1)} / hr`,
     analytics
       ? `${analytics.engine} query ${analytics.queryLatencyMs.toFixed(2)} ms`
       : "Columnar engine warming",

@@ -36,4 +36,4 @@ export const NIGHT_INERTIA_END = 3;
 
 export const CATCHMENT_POPULATION = 412_000;
 
-export const HEAT_EPISODE_LABEL = "Synthetic July extreme-heat episode (Kowloon West)";
+export const HEAT_EPISODE_LABEL = "HKO Open Data rolling 24-hour observed + forecast envelope (Kowloon West)";

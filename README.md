@@ -11,6 +11,7 @@ Aerospace-grade urban microclimate digital twin and Hospital Authority cardiovas
 - Deck.gl v9 + MapLibre (Carto Dark Matter) — WGS84 display CRS
 - DuckDB-WASM + Apache Arrow for client-side diurnal analytics
 - First-principles Gagge 2-node + CVI + M/M/c (CMC, KWH, QEH)
+- Live HKO Open Data (`/api/hko/envelope`) for Kowloon T/RH, WHOT, and 9-day forecast anchors
 
 ## Quick start
 

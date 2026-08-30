@@ -14,6 +14,7 @@ import type {
   BuildingFeature,
   BuildingHourState,
   DuckDbQueryBundle,
+  HkoDiurnalEnvelope,
   PlaybackSpeed,
   PolicyImpact,
   PolicyState,
@@ -48,25 +49,71 @@ interface SimulationContextValue {
   setHoveredId: (id: string | null) => void;
   analytics: DuckDbQueryBundle | null;
   cache: Map<string, BuildingHourState>;
+  envelope: HkoDiurnalEnvelope | null;
+  envelopeError: string | null;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
 
+async function fetchHkoEnvelope(): Promise<HkoDiurnalEnvelope> {
+  const res = await fetch("/api/hko/envelope", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`HKO envelope HTTP ${res.status}`);
+  }
+  return (await res.json()) as HkoDiurnalEnvelope;
+}
+
 export function SimulationProvider({ children }: { children: ReactNode }) {
   const buildings = useMemo(() => getBuildings(), []);
   const [hour, setHourState] = useState(15);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
   const [policy, setPolicyState] = useState<PolicyState>(DEFAULT_POLICY);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<DuckDbQueryBundle | null>(null);
+  const [envelope, setEnvelope] = useState<HkoDiurnalEnvelope | null>(null);
+  const [envelopeError, setEnvelopeError] = useState<string | null>(null);
+  const userScrubbed = useRef(false);
+  const pinnedToNow = useRef(true);
 
-  const cache = useMemo(() => precomputeHourlyCache(policy, buildings), [policy, buildings]);
-  const impact = useMemo(() => computePolicyImpact(policy, buildings), [policy, buildings]);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void fetchHkoEnvelope()
+        .then((next) => {
+          if (cancelled) return;
+          setEnvelope(next);
+          setEnvelopeError(null);
+          if (pinnedToNow.current && !userScrubbed.current) {
+            setHourState(wrapHour(next.nowHour));
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setEnvelopeError(error instanceof Error ? error.message : "HKO ingest failed");
+          }
+        });
+    };
+    load();
+    const id = window.setInterval(load, 120_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const cache = useMemo(
+    () => precomputeHourlyCache(policy, buildings, envelope),
+    [policy, buildings, envelope],
+  );
+  const impact = useMemo(
+    () => computePolicyImpact(policy, buildings, envelope),
+    [policy, buildings, envelope],
+  );
   const snapshot = useMemo(
-    () => evaluateSystemAtHour(hour, policy, buildings, cache),
-    [hour, policy, buildings, cache],
+    () => evaluateSystemAtHour(hour, policy, buildings, cache, envelope),
+    [hour, policy, buildings, cache, envelope],
   );
 
   const hourlyFlat = useMemo(() => Array.from(cache.values()), [cache]);
@@ -89,6 +136,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!playing) return undefined;
+    pinnedToNow.current = false;
     let frame = 0;
     let last = performance.now();
     const loop = (now: number) => {
@@ -102,6 +150,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [playing, speed]);
 
   const setHour = useCallback((next: number) => {
+    userScrubbed.current = true;
+    pinnedToNow.current = false;
+    setPlaying(false);
     setHourState(wrapHour(next));
   }, []);
 
@@ -133,6 +184,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       setHoveredId,
       analytics,
       cache,
+      envelope,
+      envelopeError,
     }),
     [
       buildings,
@@ -149,6 +202,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       hoveredId,
       analytics,
       cache,
+      envelope,
+      envelopeError,
     ],
   );
 

@@ -9,7 +9,7 @@ import { formatHourLabel } from "@/lib/utils";
 import { getBuildings } from "@/lib/spatial-data";
 
 export function ExportReport() {
-  const { snapshot, impact, policy, hour, analytics } = useSimulation();
+  const { snapshot, impact, policy, hour, analytics, envelope } = useSimulation();
   const [open, setOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const buildings = useMemo(() => getBuildings(), []);
@@ -100,7 +100,10 @@ export function ExportReport() {
                 AERIS-HK is modelling street-canyon heat trapping across {buildings.length} tong lau and high-rise
                 footprints in Sham Shui Po and Yau Tsim Mong, coupled to Hospital Authority Kowloon West Cluster
                 (CMC, KWH) with Queen Elizabeth Hospital as regional overflow. Current HKO-analogue status:{" "}
-                <strong>{label.en} ({label.zh})</strong>. Regional mean micro-WBGT is{" "}
+                <strong>{label.en} ({label.zh})</strong>. Official HKO Very Hot Weather Warning is{" "}
+                {envelope?.warning.veryHotWeatherWarning ? "IN FORCE" : "not in force"}. Kowloon AWS mean air
+                temperature is {envelope ? `${envelope.kowloonAirTempC.toFixed(1)}°C` : "pending"} with RH{" "}
+                {envelope ? `${(envelope.kowloonRhFrac * 100).toFixed(0)}%` : "pending"}. Regional mean micro-WBGT is{" "}
                 {snapshot.regionalMeanWbgt.toFixed(1)}°C with cluster CVI {snapshot.regionalMeanCvi.toFixed(1)}.
               </p>
               <h2>2. Immediate risk (WHO heat-health / IHR framing)</h2>
@@ -191,10 +194,12 @@ export function ExportReport() {
                 0.22·elderly + 0.15·blockage, indexed 0–100. ED demand uses M/M/c queues. Analytics engine:{" "}
                 {analytics?.engine ?? "pending"} ({analytics ? `${analytics.queryLatencyMs.toFixed(2)} ms` : "n/a"}).
                 Geometry stored as WGS84 (EPSG:4326) with HK80 (EPSG:2326) easting/northing on every footprint.
+                Meteorological forcing is a rolling 24-hour HKO envelope (observed AWS + 9-day FND anchors) ingested
+                server-side from data.weather.gov.hk via /api/hko/envelope and /api/hko/ingest.
               </p>
               <p className="meta">
-                Disclaimer: Phase-1 synthetic morphology and heat-episode forcing. Not an official HKO or HA product.
-                For planning rehearsal only until live HKO Open Data and HA CMS feeds are connected.
+                Disclaimer: Synthetic tong lau morphology with live HKO Open Data meteorological forcing
+                (rhrread, 1-minute AWS CSV, warnsum WHOT, 9-day FND). Not an official HKO or HA product.
               </p>
             </div>
           </div>

@@ -2,6 +2,18 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.2.0] — 2026-08-30
+
+### Added
+
+- Live HKO Open Data ingest: `GET /api/hko/envelope` and `POST /api/hko/ingest` (pull + webhook sample).
+- Rolling 24-hour observed + forecast meteorological envelope (Kowloon AWS T/RH, WHOT, 9-day FND).
+- HUD ticker for Sham Shui Po / King's Park temperatures, official WHOT state, and FND max/min.
+
+### Changed
+
+- `lib/epidemiology-engine.ts` diurnal T/RH forcing is driven by the HKO envelope instead of a hardcoded heat-episode sinusoid.
+
 ## [0.1.0] — 2026-08-30
 
 ### Added
