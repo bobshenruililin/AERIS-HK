@@ -74,6 +74,18 @@ export const FORMULAS = {
     identity: "P_MW = Σ_b (q_AC,b · A_roof,b) / 10^6    q_AC in W/m² at 15:00 HKT",
     note: "q_AC is effectiveAcHeat (rejector waste heat after bylaw, cool roof, tenement efficiency grant, and grid failure). Not a Fiala term.",
   },
+  idw: {
+    id: "idw",
+    name: "Inverse Distance Weighting microclimate",
+    identity: "ẑ(x) = Σ d_i^{-p} z_i / Σ d_i^{-p}    p=2    d_i = haversine(x, x_i)",
+    note: "HKO Sham Shui Po, King's Park, and Kai Tak AWS (T, RH, solar, wind). Missing components skipped independently. lib/telemetry/hko-feed.ts. Not a Fiala UTCI term.",
+  },
+  "lorawan-lag": {
+    id: "lorawan-lag",
+    name: "劏房 LoRaWAN indoor lag",
+    identity: "T_in^{t+Δt}=T_in^t+(Δt/τ)(T_eq−T_in^t)  τ=4h·(0.5+0.5ρ_sub)  T_eq=(1−α)T_idw+α T_AC",
+    note: "250 synthetic LoRaWAN sensors in Sham Shui Po subdivided flats. Night battery is the same τ=4 h identity as applySubdividedFlatThermalLag. Not a Fiala term.",
+  },
 } as const;
 
 export type FormulaId = keyof typeof FORMULAS;

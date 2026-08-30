@@ -34,6 +34,8 @@ export function CommandPalette() {
     loadSimulation,
     setCopilotPanelOpen,
     runParetoSolver,
+    enterLiveMonitoring,
+    enterPredictiveTwin,
   } = sim;
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -150,6 +152,22 @@ export function CommandPalette() {
     }));
     const copilotItems: PaletteItem[] = [
       {
+        id: "live-monitoring",
+        group: "Ops",
+        label: "Live monitoring",
+        hint: "HKO AWS + IDW field",
+        icon: "scenario",
+        run: () => enterLiveMonitoring(),
+      },
+      {
+        id: "predictive-twin",
+        group: "Ops",
+        label: "Predictive twin",
+        hint: "July 2022 heatwave plate",
+        icon: "scenario",
+        run: () => enterPredictiveTwin(),
+      },
+      {
         id: "ask-copilot",
         group: "Copilot",
         label: "Ask Spatial Policy Copilot",
@@ -189,7 +207,7 @@ export function CommandPalette() {
         ) || STREET_QUERIES.some((row) => row.q.some((alias) => alias.includes(q) || q.includes(alias)) && item.label.toLowerCase().includes(row.street.toLowerCase()));
       })
       .slice(0, 24);
-  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario, savedRuns, loadSimulation, setCopilotPanelOpen, runParetoSolver]);
+  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario, savedRuns, loadSimulation, setCopilotPanelOpen, runParetoSolver, enterLiveMonitoring, enterPredictiveTwin]);
 
   return (
     <AnimatePresence>

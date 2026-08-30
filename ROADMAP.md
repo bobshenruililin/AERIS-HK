@@ -22,6 +22,7 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Rolling 24-hour observed + forecast envelope replaces synthetic T/RH sinusoids in `lib/epidemiology-engine.ts`
 - [x] Client remains DuckDB-WASM + Deck.gl; meteorology arrives as JSON from the Route Handler
 - [x] Official WHOT drives the HUD badge; canyon WBGT remains an AERIS overlay
+- [x] Edge pollers + IDW Kowloon field (`lib/telemetry/hko-feed.ts`, `GET /api/telemetry/live`) and 250 LoRaWAN 劏房 sensors with LIVE / PREDICTIVE HUD
 
 ### `/goal` PostGIS HK80 synchronization (complete)
 
@@ -89,6 +90,7 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Full-stack hardening: WebGL/WASM/Worker failover, error boundaries, hydration gate, keyboard 1–4/Space/⌘K/Esc, formula micro-tooltips, `tsc --noEmit` clean
 - [x] Spatial Policy Copilot: Zod tool calling (`run_counterfactual` / `focus_hotspot` / `query_hospital_capacity` / `compare_scenarios`), Deck.gl + TwinCanvas fly-to + peak-hour scrub + green/red CVI diffs, click-to-highlight physics citations
 - [x] Multi-objective NSGA-II Pareto solver (500 generations, Web Worker): cost / Cat 1–3 averted / tenement ΔGini / peak HVAC MW; click-to-apply levers on the 3D twin
+- [x] Live HKO telemetry + IDW Kowloon microclimate field (Sham Shui Po / King's Park / Kai Tak) and 250 LoRaWAN 劏房 sensors; LIVE MONITORING vs PREDICTIVE TWIN HUD
 - [ ] Figma / Notion / Canva / Drive MCP (requires Cursor desktop authentication)
 - [ ] Authentication and audit log for HA/DH users (login)
 - [ ] Traditional Chinese screen-reader pass and WCAG contrast on glass panels

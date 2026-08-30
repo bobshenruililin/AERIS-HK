@@ -289,6 +289,7 @@ export function TwinCanvas() {
         hexes: lod === 0 ? hexes9Ref.current : hexes10Ref.current,
         copilot: state.copilot,
         parentIds: packRef.current.parentIds,
+        sensors: state.sensorLod,
       });
       raf = requestAnimationFrame(loop);
     };
@@ -403,6 +404,7 @@ function drawFrame(
     hexes: ReturnType<typeof aggregateHeatPlumes>;
     copilot: CopilotSpatialState;
     parentIds: string[];
+    sensors: Array<{ lon: number; lat: number; indoorC: number; acOn: boolean }>;
   },
 ) {
   const parent = canvas.parentElement;
@@ -804,6 +806,20 @@ function drawFrame(
       ctx.strokeStyle = "rgba(15,23,42,0.9)";
       ctx.lineWidth = 1.1 * dpr;
       ctx.stroke();
+    }
+  }
+
+  if (args.lod > 0 && args.sensors.length > 0) {
+    for (const sensor of args.sensors) {
+      const q = projectEnu(wgs84ToEnu(sensor.lon, sensor.lat, 12 + (sensor.indoorC - 28) * 0.4), view, w, h, basis);
+      if (!q.visible) continue;
+      const hot = Math.max(0, Math.min(1, (sensor.indoorC - 28) / 8));
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, (1.6 + hot) * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = sensor.acOn
+        ? `rgba(52,211,153,${0.45 + 0.4 * hot})`
+        : `rgba(251,146,60,${0.4 + 0.5 * hot})`;
+      ctx.fill();
     }
   }
 

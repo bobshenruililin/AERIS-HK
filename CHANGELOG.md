@@ -2,6 +2,19 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.15.0] — 2026-08-30
+
+### Added
+
+- Meteorological ingestion engine `lib/telemetry/hko-feed.ts`: serverless **edge** pollers for Hong Kong Observatory AWS CSVs (air temperature, relative humidity, solar radiation, wind vector) at Sham Shui Po, King's Park, and Kai Tak. Inverse Distance Weighting (p = 2, haversine km) reconstructs a continuous Kowloon-peninsula microclimate field. Route: `GET /api/telemetry/live` (`runtime: "edge"`). Additive to the existing Node envelope at `/api/hko/envelope`.
+- Synthetic LoRaWAN 劏房 mesh `lib/telemetry/sensor-network.ts`: 250 indoor thermal sensors across Sham Shui Po subdivided flats with explicit-Euler lag \(T_{in}^{t+\Delta t}=T_{in}^t+(\Delta t/\tau)(T_{eq}-T_{in}^t)\), \(\tau=4\,\mathrm{h}\cdot(0.5+0.5\rho_{sub})\), plus the existing concrete-battery identity at night.
+- LIVE MONITORING vs PREDICTIVE TWIN HUD toggle (`data-testid="live-ops-toggle"`). Live mode pins the playhead to current HKO telemetry and applies the IDW residual on every footprint; Predictive mode loads the July 2022 37.4°C heatwave plate. Default `opsMode` is the compile-time literal `"live"` (no `Date.now()` / `localStorage` during render).
+- `npm run test:telemetry`. Delivery ledger in `SYSTEM_INTELLIGENCE.md` §13.
+
+### Changed
+
+- `canyonAirTemp` / Gagge / hourly cache accept an optional spatial weather sample so LIVE IDW does not replace the scenario envelope path.
+
 ## [0.14.0] — 2026-08-30
 
 ### Added
