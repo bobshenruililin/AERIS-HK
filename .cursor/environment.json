@@ -1,0 +1,11 @@
+{
+  "name": "AERIS-HK",
+  "install": "python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements-dev.txt",
+  "terminals": [
+    {
+      "name": "api",
+      "command": ".venv/bin/python -m aeris_hk.main"
+    }
+  ],
+  "ports": [8000]
+}
