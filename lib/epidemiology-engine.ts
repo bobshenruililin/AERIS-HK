@@ -2,6 +2,7 @@ import type {
   BuildingFeature,
   BuildingHourState,
   CviRiskTier,
+  DistrictName,
   HkoHeatStatus,
   HospitalHourState,
   PolicyImpact,
@@ -22,7 +23,7 @@ import { solarRadiationIndex, roofAbsorbedShortwaveWm2 } from "./solar";
 import { canyonInsolation, roofAbsorbedWithCloudWm2 } from "./solar-engine";
 import { canyonMetrics } from "./canyon";
 import { clamp, lerp, wrapHour } from "./utils";
-import { getBuildings } from "./spatial-data";
+import { getBuildings, buildingCentroid } from "./spatial-data";
 import type { HkoDiurnalEnvelope } from "./hko/types";
 import { sampleHkoEnvelope } from "./hko/envelope";
 import type { HaNowcast } from "./ha/types";
@@ -37,6 +38,7 @@ import {
   summerClo,
   wbgtSpreadC,
 } from "./biophysics";
+import { haBedDeficitBeds, PRE_TRANSFER_OCCUPANCY_CAP, rebalanceClusterLoad } from "./hospital-triage";
 
 const STEFAN_LINEAR_HR = 4.7;
 const LEWIS_RATIO = 16.5;
@@ -64,7 +66,24 @@ function relativeHumidity(
   if (night && forcing.nightRhFloor > 0) {
     rh = Math.max(rh, forcing.nightRhFloor);
   }
+  rh += forcing.postStormRhBoost;
   return clamp(rh, 0.25, 0.99);
+}
+
+/** Sham Shui Po harbour-side lowlands (Nam Cheong / west Yen Chow / Cheung Sha Wan). */
+export function isShamShuiPoCoastalLowland(district: DistrictName, lon: number, lat: number): boolean {
+  return district === "Sham Shui Po" && lon <= 114.163 && lat <= 22.334 && lat >= 22.324;
+}
+
+export function coastalFloodIndoorBoostC(
+  building: BuildingFeature,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+): number {
+  if (forcing.coastalFloodM <= 0) return 0;
+  const [lon, lat] = buildingCentroid(building);
+  if (!isShamShuiPoCoastalLowland(building.properties.district, lon, lat)) return 0;
+  const mag = clamp(forcing.coastalFloodM / 1.4, 0, 1.25);
+  return (1.15 + 0.85 * building.properties.ventilationBlockage) * mag;
 }
 
 /**
@@ -129,7 +148,8 @@ function canyonAirTemp(
     0.0145 * ac +
     0.9 * building.properties.subdividedFlatDensity +
     0.95 * (1 - svf);
-  return regional + canyon;
+  const flood = coastalFloodIndoorBoostC(building, forcing) * 0.28;
+  return regional + canyon + flood;
 }
 
 function nightShelterRelief(hour: number, policy: PolicyState): number {
@@ -176,12 +196,14 @@ export function indoorAirTemp(
 ): number {
   const live = indoorAirTempLive(hour, building, policy, envelope, forcing);
   const charge = indoorAirTempLive(BATTERY_CHARGE_HOUR, building, policy, envelope, forcing);
-  return applySubdividedFlatThermalLag(
+  const lagged = applySubdividedFlatThermalLag(
     hour,
     live,
     charge,
     building.properties.subdividedFlatDensity,
-  ).indoorC;
+    forcing.batteryIntensity,
+  );
+  return lagged.indoorC + coastalFloodIndoorBoostC(building, forcing);
 }
 
 function globeTemp(
@@ -309,10 +331,15 @@ export function evaluateBuildingAtHour(
     indoorLive,
     chargeIndoor,
     building.properties.subdividedFlatDensity,
+    forcing.batteryIntensity,
   );
-  const indoorTa = lagged.indoorC;
+  const floodC = coastalFloodIndoorBoostC(building, forcing);
+  const indoorTa = lagged.indoorC + floodC;
   const rh = relativeHumidity(hour, envelope, forcing);
-  const indoorRh = Math.min(0.92, rh + 0.04);
+  const indoorRh = Math.min(
+    0.99,
+    rh + 0.04 + (floodC > 0 ? 0.05 * clamp(forcing.coastalFloodM / 1.4, 0, 1) : 0),
+  );
   const { hw, svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
   const insol = canyonInsolation({
     hourHkt: hour,
@@ -573,6 +600,7 @@ function evaluateHospital(
   buildings: BuildingFeature[],
   policy: PolicyState,
   nowcast: HaNowcast | null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): HospitalHourState {
   const byId = new Map(buildings.map((b) => [b.properties.id, b]));
   let lambda = 0;
@@ -609,8 +637,11 @@ function evaluateHospital(
   const nearNow =
     Boolean(nowcast) && Math.abs(wrapHour(hour) - wrapHour(nowcast?.nowHour ?? hour)) < 0.85;
   const occupancySource = observed && nearNow ? ("delayed-nowcast" as const) : ("model" as const);
-  const occupancy = occupancySource === "delayed-nowcast" ? observed!.occupancyFrac : modelledOcc;
-  const bedOccupancy = clamp(occupancy, 0.4, 1.35);
+  let occupancy = occupancySource === "delayed-nowcast" ? observed!.occupancyFrac : modelledOcc;
+  if (spec.code === "CMC") {
+    occupancy += 0.26 * clamp(forcing.coastalFloodM / 1.4, 0, 1);
+  }
+  const bedOccupancy = clamp(occupancy, 0.4, PRE_TRANSFER_OCCUPANCY_CAP);
   const bedDeficitPct = Math.max(0, (bedOccupancy - 1) * 100);
   const waitPenalty = 0.55 * Math.max(0, edQueue.waitHours);
   const occPenalty = 0.9 * Math.max(0, bedOccupancy - 0.85);
@@ -632,6 +663,10 @@ function evaluateHospital(
     occupancySource,
     waitCat3P50Minutes: observed?.waitCat3P50Minutes ?? null,
     nowcastDelayMinutes: observed?.occupancyDelayMinutes ?? null,
+    occupancyPreTransfer: bedOccupancy,
+    occupancyPostTransfer: bedOccupancy,
+    transferredIn: 0,
+    transferredOut: 0,
   };
 }
 
@@ -668,9 +703,10 @@ export function evaluateSystemAtHour(
   const buildingStates = buildings.map((b) =>
     evaluateBuildingInterpolated(b, hour, policy, cache, envelope, forcing),
   );
-  const hospitals = HOSPITALS.map((spec) =>
-    evaluateHospital(spec, hour, buildingStates, buildings, policy, nowcast),
+  const hospitalsRaw = HOSPITALS.map((spec) =>
+    evaluateHospital(spec, hour, buildingStates, buildings, policy, nowcast, forcing),
   );
+  const { hospitals, plan } = rebalanceClusterLoad(hospitalsRaw);
   const regionalMeanWbgt =
     buildingStates.reduce((s, b) => s + b.microWbgt, 0) / Math.max(1, buildingStates.length);
   const regionalMeanCvi =
@@ -689,6 +725,7 @@ export function evaluateSystemAtHour(
     hkoStatus: resolveHeatStatus(regionalMeanWbgt, meanOutdoor, envelope),
     clusterBedStress,
     totalCat13Arrivals,
+    triage: plan,
   };
 }
 
@@ -725,20 +762,25 @@ export function computePolicyImpact(
 
   const hourlyBaselineArrivals: number[] = [];
   const hourlyScenarioArrivals: number[] = [];
+  const hourlyBaselineBedDeficitBeds: number[] = [];
+  const hourlyScenarioBedDeficitBeds: number[] = [];
 
   for (let hour = 0; hour < 24; hour += 1) {
     const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope, nowcast, forcing);
     const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope, nowcast, forcing);
     hourlyBaselineArrivals.push(base.totalCat13Arrivals);
     hourlyScenarioArrivals.push(scen.totalCat13Arrivals);
+    hourlyBaselineBedDeficitBeds.push(haBedDeficitBeds(base.hospitals));
+    hourlyScenarioBedDeficitBeds.push(haBedDeficitBeds(scen.hospitals));
     baselineAdmissions24h += base.totalCat13Arrivals;
     scenarioAdmissions24h += scen.totalCat13Arrivals;
-    const baseMort = base.hospitals.reduce((s, h) => s + h.relativeMortalityIndex, 0) / 3;
-    const scenMort = scen.hospitals.reduce((s, h) => s + h.relativeMortalityIndex, 0) / 3;
+    const nHosp = Math.max(1, base.hospitals.length);
+    const baseMort = base.hospitals.reduce((s, h) => s + h.relativeMortalityIndex, 0) / nHosp;
+    const scenMort = scen.hospitals.reduce((s, h) => s + h.relativeMortalityIndex, 0) / nHosp;
     baselineMort += baseMort;
     scenarioMort += scenMort;
-    baselineDef += base.hospitals.reduce((s, h) => s + h.bedDeficitPct, 0) / 3;
-    scenarioDef += scen.hospitals.reduce((s, h) => s + h.bedDeficitPct, 0) / 3;
+    baselineDef += base.hospitals.reduce((s, h) => s + h.bedDeficitPct, 0) / nHosp;
+    scenarioDef += scen.hospitals.reduce((s, h) => s + h.bedDeficitPct, 0) / nHosp;
   }
 
   baselineMort /= 24;
@@ -763,6 +805,8 @@ export function computePolicyImpact(
     scenarioMortalityIndex: scenarioMort,
     hourlyBaselineArrivals,
     hourlyScenarioArrivals,
+    hourlyBaselineBedDeficitBeds,
+    hourlyScenarioBedDeficitBeds,
   };
 }
 

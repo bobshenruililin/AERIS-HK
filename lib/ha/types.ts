@@ -6,6 +6,7 @@ export const HA_HOSPITAL_NAMES: Record<HospitalCode, string> = {
   CMC: "Caritas Medical Centre",
   KWH: "Kwong Wah Hospital",
   QEH: "Queen Elizabeth Hospital",
+  PMH: "Princess Margaret Hospital",
 };
 
 export interface CatMixFractions {

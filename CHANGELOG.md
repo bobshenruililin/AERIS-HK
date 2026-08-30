@@ -2,6 +2,21 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.11.0] — 2026-08-30
+
+### Added
+
+- Multi-cluster load rebalancing in `lib/hospital-triage.ts`: when CMC or KWH exceed 120% staffed acute beds, excess inpatients board onto Princess Margaret (PMH) and Queen Elizabeth (QEH). PMH is a transfer receiver with a small primary catchment so total λ is unchanged.
+- Deck.gl / TwinCanvas ambulance particles along West Kowloon Corridor and Nathan Road (WGS84 polylines, PathLayer + ScatterplotLayer; skipped at district LoD).
+- Stress plates: **Super Typhoon + Post-Storm Heat Surge** (Sham Shui Po coastal flooding + post-cyclone humidity) and **Subdivided Flat Concrete Thermal Battery (3 AM Peak)**.
+- One-click **Executive Briefing Mode**: population at risk (CVI ≥ 70 / indoor ≥ 32°C / indoor WBGT ≥ 28), projected HA bed deficit (post-rebalance), and ROI per intervention dollar.
+- Tests: `test:triage`, `test:briefing`; scenario matrix now five plates.
+
+### Changed
+
+- Occupancy clamp raised to 1.45 pre-transfer so 120% overflow is reachable; policy-impact mortality/deficit averages over `hospitals.length` (four nodes).
+- Control Dock labels Super TY / 3 AM; HA nowcast TARGET_CODES include Princess Margaret Hospital. Neon cluster ids remain CMC / KWH / QEH.
+
 ## [0.10.0] — 2026-08-30
 
 ### Added

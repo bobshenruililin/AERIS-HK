@@ -54,6 +54,19 @@ export const HOSPITALS: readonly HospitalSpec[] = [
     baselineOccupancy: 0.93,
     catchmentWeight: { "Sham Shui Po": 0.35, "Yau Tsim Mong": 0.65 },
   },
+  {
+    code: "PMH",
+    nameEn: "Princess Margaret Hospital",
+    nameZh: "瑪嘉烈醫院",
+    clusterLabel: "Kowloon West Cluster — inter-hospital transfer receiver for CMC / KWH overflow",
+    longitude: 114.1348,
+    latitude: 22.3409,
+    edServers: 22,
+    muPerHour: 2.5,
+    staffedAcuteBeds: 1500,
+    baselineOccupancy: 0.9,
+    catchmentWeight: { "Sham Shui Po": 0.08, "Yau Tsim Mong": 0.02 },
+  },
 ] as const;
 
 export function hospitalByCode(code: HospitalCode): HospitalSpec {

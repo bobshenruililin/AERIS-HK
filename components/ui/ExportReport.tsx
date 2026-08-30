@@ -231,7 +231,7 @@ export function ExportReport() {
               <ol>
                 <li>Activate additional designated night cooling shelters within 400 m of Pei Ho / Apliu and Temple Street canyons before 19:00 HKT.</li>
                 <li>Scale DHC / CGAT community nurse wellness calls to buildings with elderly ratio ≥ 0.45 and indoor T ≥ 32°C.</li>
-                <li>Pre-alert CMC A&E and KWH medical wards; negotiate QEH overflow boarding if cluster occupancy exceeds 95%.</li>
+                <li>Pre-alert CMC A&E and KWH medical wards; auto-rebalance inpatients above 120% occupancy onto PMH and QEH via West Kowloon Corridor / Nathan Road ambulance vectors.</li>
                 <li>Issue targeted heat-health SMS in 繁中 / EN to subdivided-flat blocks with CVI ≥ 70.</li>
               </ol>
               <h2>7. Methods (surveillance metadata)</h2>

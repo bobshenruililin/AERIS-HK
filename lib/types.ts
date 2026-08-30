@@ -1,6 +1,6 @@
 export type DistrictName = "Sham Shui Po" | "Yau Tsim Mong";
 
-export type HospitalCode = "CMC" | "KWH" | "QEH";
+export type HospitalCode = "CMC" | "KWH" | "QEH" | "PMH";
 
 export type CviRiskTier = "low" | "moderate" | "high" | "critical";
 
@@ -15,6 +15,26 @@ export type PlaybackSpeed = 1 | 2 | 5;
 export type RGBA = [number, number, number, number];
 
 export type LonLat = [number, number];
+
+export type TransferArterial = "west-kowloon-corridor" | "nathan-road";
+
+export interface TransferLeg {
+  from: HospitalCode;
+  to: HospitalCode;
+  patients: number;
+  arterial: TransferArterial;
+  path: LonLat[];
+}
+
+export interface LoadBalancePlan {
+  triggered: boolean;
+  overflowThreshold: number;
+  sources: HospitalCode[];
+  receivers: HospitalCode[];
+  legs: TransferLeg[];
+  totalTransferred: number;
+  remainingUnplaced: number;
+}
 
 export interface Hk80Coordinate {
   easting: number;
@@ -210,6 +230,10 @@ export interface HospitalHourState {
   occupancySource: "delayed-nowcast" | "model";
   waitCat3P50Minutes: number | null;
   nowcastDelayMinutes: number | null;
+  occupancyPreTransfer: number;
+  occupancyPostTransfer: number;
+  transferredIn: number;
+  transferredOut: number;
 }
 
 export interface SystemHourSnapshot {
@@ -221,6 +245,7 @@ export interface SystemHourSnapshot {
   hkoStatus: HkoHeatStatus;
   clusterBedStress: number;
   totalCat13Arrivals: number;
+  triage: LoadBalancePlan;
 }
 
 export interface PolicyImpact {
@@ -235,6 +260,8 @@ export interface PolicyImpact {
   scenarioMortalityIndex: number;
   hourlyBaselineArrivals: number[];
   hourlyScenarioArrivals: number[];
+  hourlyBaselineBedDeficitBeds: number[];
+  hourlyScenarioBedDeficitBeds: number[];
 }
 
 export interface DistrictHourAggregate {

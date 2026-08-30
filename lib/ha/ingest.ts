@@ -25,7 +25,7 @@ const CACHE_MS = 90_000;
 let lastNowcast: HaNowcast | null = null;
 let lastPullMs = 0;
 
-const TARGET_CODES: HospitalCode[] = ["CMC", "KWH", "QEH"];
+const TARGET_CODES: HospitalCode[] = ["CMC", "KWH", "QEH", "PMH"];
 
 async function fetchWaitBoard(): Promise<{ rows: HaWaitBoardRow[]; updateTime: string | null }> {
   const ctrl = new AbortController();

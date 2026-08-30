@@ -32,7 +32,7 @@ export function HospitalBoard() {
     >
       <GlassPanel>
         <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">HA Kowloon West surge</div>
-        <h2 className="mb-1 text-sm font-semibold text-white">CMC · KWH · QEH overflow</h2>
+        <h2 className="mb-1 text-sm font-semibold text-white">CMC · KWH · PMH · QEH overflow</h2>
         <div className="mb-2 text-[10px] text-slate-400">
           {haNowcast
             ? `Anonymised A&E nowcast · ${delay ?? 0} min CMS lag · hospital aggregates only · click a node to light catchment arcs`
@@ -40,6 +40,12 @@ export function HospitalBoard() {
               ? `HA nowcast error: ${haError}`
               : "HA CMS / A&E nowcast ingest…"}
         </div>
+        {snapshot.triage?.triggered ? (
+          <div className="mb-2 rounded-lg bg-amber-400/10 px-2 py-1 text-[10px] text-amber-100" data-testid="load-balance-banner">
+            120% overflow · {snapshot.triage.totalTransferred.toFixed(1)} boarded CMC/KWH → PMH/QEH along West
+            Kowloon Corridor / Nathan Road
+          </div>
+        ) : null}
         <div className="space-y-2">
           {snapshot.hospitals.map((h) => {
             const spec = HOSPITALS.find((s) => s.code === h.code);
@@ -72,9 +78,20 @@ export function HospitalBoard() {
                   <span>ED {(h.edQueue.utilization * 100).toFixed(0)}%</span>
                 </div>
                 <div className="text-[10px] text-slate-500">
-                  Beds {occ.toFixed(1)}% ({h.occupancySource === "delayed-nowcast" ? "delayed census" : "model"}) · wait{" "}
+                  Beds {occ.toFixed(1)}%
+                  {h.occupancyPreTransfer > 0 && Math.abs(h.occupancyPreTransfer - h.bedOccupancy) > 0.002
+                    ? ` (${(h.occupancyPreTransfer * 100).toFixed(1)}% pre-xfer)`
+                    : ""}{" "}
+                  ({h.occupancySource === "delayed-nowcast" ? "delayed census" : "model"}) · wait{" "}
                   {h.edQueue.waitHours.toFixed(2)} h · μ {h.calibratedMu.toFixed(2)} / c {h.calibratedServers}
                 </div>
+                {h.transferredOut > 0.05 || h.transferredIn > 0.05 ? (
+                  <div className="text-[10px] text-amber-200/90" data-testid={`transfer-${h.code}`}>
+                    {h.transferredOut > 0.05 ? `−${h.transferredOut.toFixed(1)} boarded out` : ""}
+                    {h.transferredOut > 0.05 && h.transferredIn > 0.05 ? " · " : ""}
+                    {h.transferredIn > 0.05 ? `+${h.transferredIn.toFixed(1)} received` : ""}
+                  </div>
+                ) : null}
                 {live?.waitCat3P50Minutes != null ? (
                   <div className="text-[10px] text-cyan-200/80">
                     HA Cat 3 p50 {live.waitCat3P50Minutes} min

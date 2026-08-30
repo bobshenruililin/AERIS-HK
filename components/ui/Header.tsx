@@ -7,6 +7,7 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
 import { solarElevationDeg } from "@/lib/solar";
 import { ExportReport } from "@/components/ui/ExportReport";
+import { ExecutiveBriefing } from "@/components/ui/ExecutiveBriefing";
 import { CausalStrip } from "@/components/ui/CausalStrip";
 import { BriefingButton } from "@/components/simulation/BriefingTour";
 
@@ -72,6 +73,7 @@ export function Header() {
           <div className="flex flex-wrap items-center gap-2">
             <BriefingButton />
             <ExportReport />
+            <ExecutiveBriefing />
             <div className={`rounded-full border px-3 py-1 text-[11px] font-medium ${badge}`}>
               {label.zh} · {label.en}
             </div>

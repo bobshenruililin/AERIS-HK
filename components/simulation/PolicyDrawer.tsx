@@ -187,7 +187,7 @@ export function PolicyDrawer() {
           Deltas versus a zero-intervention counterfactual ({BASELINE_POLICY.coolingShelters} shelters, no DHC, no albedo, no bylaw).
           Cool-roof targeting solves an exact 0/1 knapsack on 24-hour admissions averted / m² (DuckDB{" "}
           <span className="font-mono">ROW_NUMBER</span>/<span className="font-mono">SUM OVER</span> ranks the same
-          table). Gagge S = M − W − E − R − C and Bishai-style relative risk drive M/M/c arrivals at CMC, KWH and QEH.
+          table). Gagge S = M − W − E − R − C and Bishai-style relative risk drive M/M/c arrivals at CMC, KWH, PMH and QEH.
         </p>
       </GlassPanel>
     </HudDrawer>
