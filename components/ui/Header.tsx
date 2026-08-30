@@ -160,8 +160,9 @@ export function Header() {
               : "DuckDB warming"}
           </span>
           <span data-testid="spatial-grid-stats">
-            ENU grid {spatialIndex.vectorCount.toLocaleString()} · bbox {spatialIndex.bboxMs.toFixed(2)} ms · kNN{" "}
-            {spatialIndex.knnMs.toFixed(2)} ms
+            {spatialIndex.vectorCount
+              ? `ENU grid ${spatialIndex.vectorCount.toLocaleString()} · bbox ${spatialIndex.bboxMs.toFixed(2)} ms · kNN ${spatialIndex.knnMs.toFixed(2)} ms`
+              : "ENU grid…"}
           </span>
           <span>
             {spatial.authority === "postgis-hk80"

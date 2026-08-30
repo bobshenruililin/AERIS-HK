@@ -404,11 +404,24 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     () => evaluateSystemAtHour(hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing),
     [hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing],
   );
-  const spatialGrid = useMemo(() => spatialGridFromBuildings(buildings), [buildings]);
-  const spatialIndex = useMemo(() => {
-    spatialGrid.applyHourlyCvi(snapshot.buildings);
-    return measureSpatialIndex(spatialGrid);
-  }, [spatialGrid, snapshot]);
+  const [spatialIndex, setSpatialIndex] = useState<SpatialIndexStats>({
+    vectorCount: 0,
+    cellCount: 0,
+    bboxMs: 0,
+    bboxHits: 0,
+    knnMs: 0,
+    knnK: 0,
+  });
+  const spatialGridRef = useRef<ReturnType<typeof spatialGridFromBuildings> | null>(null);
+  useEffect(() => {
+    spatialGridRef.current = spatialGridFromBuildings(buildings);
+  }, [buildings]);
+  useEffect(() => {
+    const grid = spatialGridRef.current;
+    if (!grid) return;
+    grid.applyHourlyCvi(snapshot.buildings);
+    setSpatialIndex(measureSpatialIndex(grid));
+  }, [buildings, snapshot]);
 
   const hourlyFlat = useMemo(() => Array.from(cache.values()), [cache]);
   const queryHour = Math.round(wrapHour(hour)) % 24;
