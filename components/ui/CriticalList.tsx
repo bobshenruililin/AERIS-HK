@@ -2,15 +2,29 @@
 
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
+import { HudDrawer, HudPill } from "./HudDrawer";
 
 export function CriticalList() {
-  const { coolRoofCandidates, policy, setSelectedId, selectedId, coolRoofPlan, buildings } = useSimulation();
+  const { coolRoofCandidates, policy, setSelectedId, selectedId, coolRoofPlan, buildings, toggleDrawer, focusBuilding } =
+    useSimulation();
   const selected = new Set(policy.coolRoofTargetIds);
   const ranked = [...coolRoofCandidates].sort((a, b) => b.efficiency - a.efficiency).slice(0, 10);
   const maxEff = Math.max(1e-9, ranked[0]?.efficiency ?? 0);
 
   return (
-    <div className="pointer-events-none absolute bottom-36 left-0 z-20 hidden w-full max-w-sm p-3 md:block md:p-4">
+    <HudDrawer
+      drawerId="critical"
+      className="pointer-events-none absolute bottom-36 left-0 z-20 hidden w-full max-w-sm p-3 md:block md:p-4"
+      pill={
+        <HudPill
+          testId="critical-pill"
+          label="Knapsack"
+          value={`${policy.coolRoofTargetIds.length} roofs`}
+          spark={ranked.map((r) => r.admissionsAverted)}
+          onClick={() => toggleDrawer("critical")}
+        />
+      }
+    >
       <GlassPanel padded={false} className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
           <div>
@@ -29,7 +43,10 @@ export function CriticalList() {
               <li key={row.buildingId}>
                 <button
                   type="button"
-                  onClick={() => setSelectedId(row.buildingId)}
+                  onClick={() => {
+                    setSelectedId(row.buildingId);
+                    focusBuilding(row.buildingId);
+                  }}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] hover:bg-amber-400/10 ${
                     selectedId === row.buildingId ? "bg-amber-400/15" : ""
                   }`}
@@ -52,6 +69,6 @@ export function CriticalList() {
           })}
         </ol>
       </GlassPanel>
-    </div>
+    </HudDrawer>
   );
 }

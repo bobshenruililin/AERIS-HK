@@ -4,6 +4,7 @@ import { Pause, Play } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
 import { solarElevationDeg } from "@/lib/solar";
+import { solarPositionHk } from "@/lib/solar-engine";
 import type { PlaybackSpeed } from "@/lib/types";
 import { GlassPanel } from "./GlassPanel";
 
@@ -12,6 +13,7 @@ const SPEEDS: PlaybackSpeed[] = [1, 2, 5];
 export function TimeScrubber() {
   const { hour, setHour, playing, setPlaying, speed, setSpeed, impact } = useSimulation();
   const elev = solarElevationDeg(hour);
+  const astro = solarPositionHk(hour);
   const solarTicks = Array.from({ length: 24 }, (_, h) => ({
     h,
     elev: solarElevationDeg(h + 0.5),
@@ -95,7 +97,8 @@ export function TimeScrubber() {
           <span>23:00</span>
         </div>
         <p className="mt-1 text-[10px] text-slate-400">
-          Solar elevation {elev.toFixed(1)}° · bars are Cat 1–3 arrival rate (scenario over dim baseline) · canyon lag
+          Solar elevation {elev.toFixed(1)}° (twin) · astro {astro.elevationDeg.toFixed(1)}° az {astro.azimuthDeg.toFixed(0)}°
+          at 22.3193°N 114.1694°E · bars are Cat 1–3 arrival rate (scenario over dim baseline) · canyon lag
           sustains indoor heat after sunset in high-density tong lau.
         </p>
       </GlassPanel>

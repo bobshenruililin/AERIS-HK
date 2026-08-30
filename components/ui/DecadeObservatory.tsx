@@ -2,16 +2,29 @@
 
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
+import { HudDrawer, HudPill } from "./HudDrawer";
 import { DECADE_EPISODES, decadeCumulativeAverted, episodeRelativeRisk } from "@/lib/decade";
 
 export function DecadeObservatory() {
-  const { episodeId, setEpisodeId, impact, coolRoofPlan, neonArchive } = useSimulation();
+  const { episodeId, setEpisodeId, impact, coolRoofPlan, neonArchive, toggleDrawer } = useSimulation();
   const live = impact.admissionsAverted;
   const cumulative = decadeCumulativeAverted(live);
   const maxRr = Math.max(...DECADE_EPISODES.map((e) => episodeRelativeRisk(e)));
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-40 z-20 flex justify-center p-3 md:bottom-44 md:p-4">
+    <HudDrawer
+      drawerId="decade"
+      className="pointer-events-none absolute inset-x-0 bottom-40 z-20 flex flex-col items-center p-3 md:bottom-44 md:p-4"
+      pill={
+        <HudPill
+          testId="decade-pill"
+          label="Decade"
+          value={`Σ ${cumulative.toFixed(0)}`}
+          spark={DECADE_EPISODES.map((e) => episodeRelativeRisk(e))}
+          onClick={() => toggleDrawer("decade")}
+        />
+      }
+    >
       <GlassPanel className="w-full max-w-5xl">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -61,6 +74,6 @@ export function DecadeObservatory() {
           </span>
         </div>
       </GlassPanel>
-    </div>
+    </HudDrawer>
   );
 }

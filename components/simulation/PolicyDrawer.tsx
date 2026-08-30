@@ -4,10 +4,29 @@ import { type ReactNode } from "react";
 import { Shield, ThermometerSun, UserRound, Building } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { HudDrawer, HudPill } from "@/components/ui/HudDrawer";
+import { MonteCarloPanel } from "@/components/ui/MonteCarloPanel";
 import { BASELINE_POLICY } from "@/lib/types";
+import { STRESS_SCENARIOS } from "@/lib/scenarios";
 
 export function PolicyDrawer() {
-  const { policy, setPolicy, resetPolicy, impact, coolRoofPlan, totalRoofM2, buildings } = useSimulation();
+  const {
+    policy,
+    setPolicy,
+    resetPolicy,
+    impact,
+    coolRoofPlan,
+    totalRoofM2,
+    buildings,
+    isDrawerExpanded,
+    toggleDrawer,
+    monteCarlo,
+    monteCarloRunning,
+    scenarioId,
+    applyScenario,
+    clearScenario,
+  } = useSimulation();
+  const headerExpanded = isDrawerExpanded("header");
   const windowDelta =
     (coolRoofPlan?.predictedAdmissionsAverted ?? 0) - (coolRoofPlan?.windowAdmissionsAverted ?? 0);
   const eta =
@@ -16,7 +35,19 @@ export function PolicyDrawer() {
       : 0;
 
   return (
-    <div className="pointer-events-none absolute right-0 top-[22rem] z-20 w-full max-w-sm p-3 md:top-[22rem] md:p-4">
+    <HudDrawer
+      drawerId="policy"
+      className={`pointer-events-none absolute right-0 z-20 w-full max-w-sm p-3 md:p-4 ${headerExpanded ? "top-[22rem]" : "top-24"}`}
+      pill={
+        <HudPill
+          testId="policy-pill"
+          label="Policy"
+          value={`${impact.admissionsAverted.toFixed(1)} Δ`}
+          spark={impact.hourlyScenarioArrivals}
+          onClick={() => toggleDrawer("policy")}
+        />
+      }
+    >
       <GlassPanel>
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
@@ -30,6 +61,27 @@ export function PolicyDrawer() {
           >
             Reset
           </button>
+        </div>
+
+        <div className="mb-2 flex flex-wrap gap-1" data-testid="scenario-chips">
+          {STRESS_SCENARIOS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              data-testid={`scenario-${s.id}`}
+              onClick={() => applyScenario(s.id)}
+              className={`rounded-full px-2 py-0.5 text-[9px] ${
+                scenarioId === s.id ? "bg-amber-400 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              {s.nameEn}
+            </button>
+          ))}
+          {scenarioId ? (
+            <button type="button" onClick={clearScenario} className="rounded-full px-2 py-0.5 text-[9px] text-slate-500">
+              live envelope
+            </button>
+          ) : null}
         </div>
 
         <Slider
@@ -90,7 +142,7 @@ export function PolicyDrawer() {
             District albedo {policy.coolRoofPercent.toFixed(1)} / 50 · knapsack averted{" "}
             {(coolRoofPlan?.predictedAdmissionsAverted ?? 0).toFixed(2)}
             {coolRoofPlan && coolRoofPlan.windowSelectedIds.length > 0
-              ? ` · window greedy ${(coolRoofPlan.windowAdmissionsAverted).toFixed(2)}${
+              ? ` · window greedy ${coolRoofPlan.windowAdmissionsAverted.toFixed(2)}${
                   windowDelta > 0.001 ? ` (+${windowDelta.toFixed(2)} exact)` : ""
                 }`
               : ""}
@@ -130,6 +182,7 @@ export function PolicyDrawer() {
             sub={`RMR ${impact.baselineMortalityIndex.toFixed(3)} → ${impact.scenarioMortalityIndex.toFixed(3)}`}
           />
         </div>
+        <MonteCarloPanel result={monteCarlo} running={monteCarloRunning} />
         <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
           Deltas versus a zero-intervention counterfactual ({BASELINE_POLICY.coolingShelters} shelters, no DHC, no albedo, no bylaw).
           Cool-roof targeting solves an exact 0/1 knapsack on 24-hour admissions averted / m² (DuckDB{" "}
@@ -137,7 +190,7 @@ export function PolicyDrawer() {
           table). Gagge S = M − W − E − R − C and Bishai-style relative risk drive M/M/c arrivals at CMC, KWH and QEH.
         </p>
       </GlassPanel>
-    </div>
+    </HudDrawer>
   );
 }
 

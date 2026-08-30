@@ -9,6 +9,7 @@ import { clamp, lerp } from "./utils";
 export const TWIN_ORIGIN = { lon: 114.1628, lat: 22.3307 } as const;
 
 export const TWIN_FLYIN_EVENT = "aeris-twin-flyin";
+export const TWIN_LOOKAT_EVENT = "aeris-twin-lookat";
 
 export interface EnuPoint {
   east: number;

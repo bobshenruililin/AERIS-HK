@@ -12,7 +12,11 @@
     "test:ha": "tsx --test scripts/ha-nowcast.test.ts",
     "test:cool-roof": "tsx --test scripts/cool-roof-optimiser.test.ts",
     "test:twin": "tsx --test scripts/twin-camera.test.ts",
-    "test:decade": "tsx --test scripts/decade.test.ts"
+    "test:decade": "tsx --test scripts/decade.test.ts",
+    "test:solar": "tsx --test scripts/solar-engine.test.ts",
+    "test:mc": "tsx --test scripts/monte-carlo.test.ts",
+    "test:scenarios": "tsx --test scripts/scenarios.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.1.14",

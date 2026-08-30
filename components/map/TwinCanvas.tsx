@@ -9,11 +9,13 @@ import { isDaylight, solarElevationDeg, sunDirectionVec } from "@/lib/solar";
 import { streetSpinesFromBuildings } from "@/lib/streets";
 import { buildingCentroid } from "@/lib/spatial-data";
 import type { BuildingFeature, HospitalCode, SystemHourSnapshot } from "@/lib/types";
+import type { HudLayers } from "@/lib/hud";
 import { advectWindParticles, createWindParticles, type WindParticle } from "@/lib/wind-field";
 import {
   HARBOUR_TWIN_VIEW,
   KOWLOON_TWIN_VIEW,
   TWIN_FLYIN_EVENT,
+  TWIN_LOOKAT_EVENT,
   cameraBasis,
   lerpView,
   pickNearestId,
@@ -99,6 +101,7 @@ export function TwinCanvas() {
   simRef.current = sim;
   const viewRef = useRef<TwinView>({ ...HARBOUR_TWIN_VIEW });
   const flyRef = useRef({ t0: 0, active: true });
+  const lookRef = useRef<{ t0: number; from: TwinView; to: TwinView } | null>(null);
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
   const pickRef = useRef<Array<{ id: string; x: number; y: number; depth: number; visible: boolean }>>([]);
 
@@ -130,8 +133,29 @@ export function TwinCanvas() {
   useEffect(() => {
     startFlyIn();
     const onFly = () => startFlyIn();
+    const onLook = (event: Event) => {
+      const detail = (event as CustomEvent<{ lon: number; lat: number }>).detail;
+      if (!detail) return;
+      const enu = wgs84ToEnu(detail.lon, detail.lat, 0);
+      lookRef.current = {
+        t0: performance.now(),
+        from: { ...viewRef.current },
+        to: {
+          ...viewRef.current,
+          targetEast: enu.east,
+          targetNorth: enu.north,
+          targetUp: 22,
+          distance: Math.min(viewRef.current.distance, 480),
+        },
+      };
+      flyRef.current.active = false;
+    };
     window.addEventListener(TWIN_FLYIN_EVENT, onFly);
-    return () => window.removeEventListener(TWIN_FLYIN_EVENT, onFly);
+    window.addEventListener(TWIN_LOOKAT_EVENT, onLook);
+    return () => {
+      window.removeEventListener(TWIN_FLYIN_EVENT, onFly);
+      window.removeEventListener(TWIN_LOOKAT_EVENT, onLook);
+    };
   }, [startFlyIn]);
 
   useEffect(() => {
@@ -154,8 +178,22 @@ export function TwinCanvas() {
         } else {
           viewRef.current = lerpView(HARBOUR_TWIN_VIEW, KOWLOON_TWIN_VIEW, t);
         }
+      } else if (lookRef.current) {
+        const t = (now - lookRef.current.t0) / 900;
+        if (t >= 1) {
+          viewRef.current = lookRef.current.to;
+          lookRef.current = null;
+        } else {
+          viewRef.current = lerpView(lookRef.current.from, lookRef.current.to, t);
+        }
       }
-      particlesRef.current = advectWindParticles(particlesRef.current, dt, state.hour, state.buildings);
+      particlesRef.current = advectWindParticles(
+        particlesRef.current,
+        dt,
+        state.hour,
+        state.buildings,
+        state.forcing,
+      );
       drawFrame(ctx, canvas, {
         view: viewRef.current,
         meshes,
@@ -171,6 +209,7 @@ export function TwinCanvas() {
         particles: particlesRef.current,
         now,
         pickRef,
+        layers: state.hudLayers,
       });
       raf = requestAnimationFrame(loop);
     };
@@ -223,6 +262,7 @@ export function TwinCanvas() {
         if (id) {
           sim.setFocusedHospital(null);
           sim.setSelectedId(id);
+          sim.setInspectorAnchor({ x: event.clientX, y: event.clientY });
         }
       }}
     />
@@ -247,6 +287,7 @@ function drawFrame(
     particles: WindParticle[];
     now: number;
     pickRef: MutableRefObject<Array<{ id: string; x: number; y: number; depth: number; visible: boolean }>>;
+    layers: HudLayers;
   },
 ) {
   const parent = canvas.parentElement;
@@ -411,6 +452,8 @@ function drawFrame(
       } else if (face.roof && greedyGhost) {
         const [r, g, b] = shadeRgb(color, face.normal, sun, ambient);
         fillPoly(ctx, projected, `rgba(${r},${g},${b},0.88)`, "rgba(226,232,240,0.7)", 1.2 * dpr);
+      } else if (args.layers.buildingWireframes) {
+        fillPoly(ctx, projected, "rgba(8,20,32,0.12)", highlight ? "rgba(34,211,238,0.95)" : "rgba(125,211,252,0.45)", 1.1 * dpr);
       } else {
         const [r, g, b] = shadeRgb(color, face.normal, sun, ambient);
         const edge = highlight ? "rgba(34,211,238,0.95)" : gold ? "rgba(251,191,36,0.7)" : "rgba(15,23,42,0.55)";
@@ -431,18 +474,24 @@ function drawFrame(
     const roofPick = projectEnu({ ...mesh.centroid, up: roofUp }, view, w, h, basis);
     picks.push({ id: mesh.id, ...roofPick });
     const cviVal = cvi.get(mesh.id) ?? 0;
-    if (cviVal >= 58) {
+    if (args.layers.thermalShimmer && cviVal >= 58) {
       const base = projectEnu({ ...mesh.centroid, up: roofUp }, view, w, h, basis);
       const tip = projectEnu({ ...mesh.centroid, up: roofUp + (cviVal - 50) * 2.6 }, view, w, h, basis);
       if (base.visible && tip.visible) {
         const plume = ctx.createLinearGradient(base.x, base.y, tip.x, tip.y);
         plume.addColorStop(0, rgba(color, 0.08));
-        plume.addColorStop(1, rgba(color, 0.38 * pulse));
+        plume.addColorStop(1, rgba(color, 0.42 * pulse));
         ctx.strokeStyle = plume;
         ctx.lineWidth = 6 * dpr;
         ctx.beginPath();
         ctx.moveTo(base.x, base.y);
-        ctx.lineTo(tip.x, tip.y);
+        const waves = 6;
+        for (let i = 1; i <= waves; i += 1) {
+          const t = i / waves;
+          const x = base.x + (tip.x - base.x) * t + Math.sin(args.now / 180 + t * 8 + mesh.centroid.east * 0.01) * 7 * dpr * t;
+          const y = base.y + (tip.y - base.y) * t;
+          ctx.lineTo(x, y);
+        }
         ctx.stroke();
       }
     }
@@ -479,17 +528,19 @@ function drawFrame(
     ctx.stroke();
   }
 
-  ctx.fillStyle = day ? "rgba(34,211,238,0.45)" : "rgba(186,230,253,0.55)";
-  for (const p of args.particles) {
-    const q = projectEnu(wgs84ToEnu(p.lon, p.lat, 6), view, w, h, basis);
-    if (!q.visible) continue;
-    const a = Math.max(0.08, 0.55 * (1 - p.age / p.maxAge));
-    ctx.globalAlpha = a;
-    ctx.beginPath();
-    ctx.arc(q.x, q.y, (1.6 + p.speed * 0.4) * dpr, 0, Math.PI * 2);
-    ctx.fill();
+  if (args.layers.windVectors) {
+    ctx.fillStyle = day ? "rgba(34,211,238,0.45)" : "rgba(186,230,253,0.55)";
+    for (const p of args.particles) {
+      const q = projectEnu(wgs84ToEnu(p.lon, p.lat, 6), view, w, h, basis);
+      if (!q.visible) continue;
+      const a = Math.max(0.08, 0.55 * (1 - p.age / p.maxAge));
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, (1.6 + p.speed * 0.4) * dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
-  ctx.globalAlpha = 1;
 
   ctx.font = `${11 * dpr}px ui-monospace, monospace`;
   ctx.textAlign = "center";

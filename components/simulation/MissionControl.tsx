@@ -10,6 +10,8 @@ import { CriticalList } from "@/components/ui/CriticalList";
 import { PolicyDrawer } from "@/components/simulation/PolicyDrawer";
 import { HudOverlays } from "@/components/assets/HudOverlays";
 import { DecadeObservatory } from "@/components/ui/DecadeObservatory";
+import { ControlDock } from "@/components/ui/ControlDock";
+import { CommandPalette, HudHotkeys } from "@/components/ui/CommandPalette";
 
 export function MissionControl() {
   return (
@@ -20,6 +22,7 @@ export function MissionControl() {
       >
         <MapViewport />
         <HudOverlays />
+        <ControlDock />
         <Header />
         <HospitalBoard />
         <PolicyDrawer />
@@ -27,6 +30,8 @@ export function MissionControl() {
         <BuildingInspector />
         <DecadeObservatory />
         <TimeScrubber />
+        <CommandPalette />
+        <HudHotkeys />
         <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 md:block">
           Synthetic morphology · live HKO + HA aggregates · not an official product
         </div>

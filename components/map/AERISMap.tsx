@@ -62,6 +62,9 @@ export default function AERISMap() {
     policy,
     focusedHospital,
     setFocusedHospital,
+    hudLayers,
+    forcing,
+    setInspectorAnchor,
   } = useSimulation();
   const [viewState, setViewState] = useState<MapViewState>({ ...HARBOUR_APPROACH_VIEW });
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
@@ -116,7 +119,7 @@ export default function AERISMap() {
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      particlesRef.current = advectWindParticles(particlesRef.current, dt, hour, buildings);
+      particlesRef.current = advectWindParticles(particlesRef.current, dt, hour, buildings, forcing);
       emit += dt;
       if (emit >= 1 / 28) {
         setParticles(particlesRef.current);
@@ -126,7 +129,7 @@ export default function AERISMap() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [hour, buildings]);
+  }, [hour, buildings, forcing]);
 
   const lighting = useMemo(() => {
     const day = isDaylight(hour);
@@ -215,10 +218,10 @@ export default function AERISMap() {
         id: "aeris-buildings",
         data: collection,
         extruded: true,
-        filled: true,
+        filled: !hudLayers.buildingWireframes,
         wireframe: true,
         pickable: true,
-        opacity: 0.96,
+        opacity: hudLayers.buildingWireframes ? 0.35 : 0.96,
         getElevation: (f) => f.properties.height * EXTRUSION_SCALE,
         getFillColor: (f) => cviColor(cviById.get(f.properties.id) ?? 0),
         getLineColor: (f) =>
@@ -244,7 +247,7 @@ export default function AERISMap() {
       }),
       new ColumnLayer<PlumeRow>({
         id: "cvi-heat-plumes",
-        data: plumes,
+        data: hudLayers.thermalShimmer ? plumes : [],
         diskResolution: 6,
         radius: 4.2,
         extruded: true,
@@ -293,7 +296,7 @@ export default function AERISMap() {
       }),
       new ScatterplotLayer<WindParticle>({
         id: "canyon-wind-particles",
-        data: particles,
+        data: hudLayers.windVectors ? particles : [],
         getPosition: (d) => [d.lon, d.lat],
         getRadius: (d) => 1.4 + d.speed * 0.35,
         radiusUnits: "meters",
@@ -336,6 +339,7 @@ export default function AERISMap() {
     arcs,
     spines,
     focusedHospital,
+    hudLayers,
   ]);
 
   const onViewStateChange = useCallback((params: { viewState: Record<string, unknown> }) => {
@@ -386,10 +390,11 @@ export default function AERISMap() {
           const [longitude, latitude] = buildingCentroid(feature);
           userMoved.current = true;
           setViewState((prev) => ({ ...prev, longitude, latitude, zoom: Math.max(prev.zoom, 16.6) }));
+          setInspectorAnchor({ x: info.x ?? 0, y: info.y ?? 0 });
         }
       }
     },
-    [buildings, setSelectedId, focusedHospital, setFocusedHospital],
+    [buildings, setSelectedId, focusedHospital, setFocusedHospital, setInspectorAnchor],
   );
 
   return (

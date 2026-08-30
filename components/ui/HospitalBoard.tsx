@@ -3,16 +3,33 @@
 import { HOSPITALS } from "@/lib/hospitals";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
+import { HudDrawer, HudPill } from "./HudDrawer";
 
 export function HospitalBoard() {
-  const { snapshot, haNowcast, haError, focusedHospital, setFocusedHospital } = useSimulation();
+  const { snapshot, haNowcast, haError, focusedHospital, setFocusedHospital, isDrawerExpanded, toggleDrawer } =
+    useSimulation();
   const delay =
     haNowcast?.hospitals.reduce((m, h) => Math.max(m, h.occupancyDelayMinutes), 0) ??
     haNowcast?.waitBoardDelayMinutes ??
     null;
+  const headerExpanded = isDrawerExpanded("header");
+  const occSpark = snapshot.hospitals.map((h) => h.bedOccupancy * 100);
+  const meanOcc = snapshot.clusterBedStress * 100;
 
   return (
-    <div className="pointer-events-none absolute left-0 top-[22rem] z-20 w-full max-w-sm p-3 md:top-[22rem] md:p-4">
+    <HudDrawer
+      drawerId="hospital"
+      className={`pointer-events-none absolute left-0 z-20 w-full max-w-sm p-3 md:p-4 ${headerExpanded ? "top-[22rem]" : "top-24"}`}
+      pill={
+        <HudPill
+          testId="hospital-pill"
+          label="HA surge"
+          value={`${meanOcc.toFixed(0)}% beds`}
+          spark={occSpark}
+          onClick={() => toggleDrawer("hospital")}
+        />
+      }
+    >
       <GlassPanel>
         <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">HA Kowloon West surge</div>
         <h2 className="mb-1 text-sm font-semibold text-white">CMC · KWH · QEH overflow</h2>
@@ -69,6 +86,6 @@ export function HospitalBoard() {
           })}
         </div>
       </GlassPanel>
-    </div>
+    </HudDrawer>
   );
 }

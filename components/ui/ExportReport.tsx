@@ -8,12 +8,16 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
 
 export function ExportReport() {
-  const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial, haNowcast, coolRoofPlan } =
+  const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial, haNowcast, coolRoofPlan, hudPreset, setHudPreset } =
     useSimulation();
   const [open, setOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const [generatedAt, setGeneratedAt] = useState(() => new Date().toISOString());
+
+  useEffect(() => {
+    if (hudPreset === 4) setOpen(true);
+  }, [hudPreset]);
 
   useEffect(() => {
     if (open) {
@@ -68,7 +72,7 @@ export function ExportReport() {
         DH / WHO briefing
       </button>
       {open ? (
-        <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur">
+        <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur" data-testid="clinical-briefing">
           <div className="relative w-full max-w-3xl rounded-2xl border border-cyan-300/20 bg-slate-950 text-slate-100 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <div className="text-sm font-semibold">Clinical policy surveillance briefing</div>
@@ -80,7 +84,15 @@ export function ExportReport() {
                 >
                   <Printer className="h-3.5 w-3.5" /> Print / PDF
                 </button>
-                <button type="button" onClick={() => setOpen(false)} className="rounded-full p-1 hover:bg-white/10" aria-label="Close briefing">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    if (hudPreset === 4) setHudPreset(1);
+                  }}
+                  className="rounded-full p-1 hover:bg-white/10"
+                  aria-label="Close briefing"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>

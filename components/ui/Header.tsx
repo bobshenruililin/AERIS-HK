@@ -24,6 +24,10 @@ export function Header() {
     policy,
     impact,
     episodeId,
+    isDrawerExpanded,
+    toggleDrawer,
+    scenarioId,
+    forcing,
   } = useSimulation();
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const elev = solarElevationDeg(hour);
@@ -43,12 +47,13 @@ export function Header() {
   const sparkBase = impact.hourlyBaselineArrivals ?? [];
   const maxSpark = Math.max(1, ...spark, ...sparkBase);
   const playhead = wrapPct(hour / 24);
+  const compact = !isDrawerExpanded("header");
 
   return (
-    <header className="pointer-events-none absolute inset-x-0 top-0 z-20 p-3 md:p-4">
+    <header className="pointer-events-none absolute inset-x-0 top-14 z-20 p-3 md:top-16 md:p-4">
       <div className="pointer-events-auto rounded-2xl border border-cyan-300/25 bg-slate-950/78 px-4 py-3 shadow-[0_0_50px_rgba(6,182,212,0.16)] backdrop-blur-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <button type="button" className="flex items-center gap-3 text-left" onClick={() => toggleDrawer("header")}>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/15 ring-1 ring-cyan-300/40">
               <HeartPulse className="h-5 w-5 text-cyan-300" />
             </div>
@@ -58,9 +63,10 @@ export function Header() {
               </h1>
               <p className="text-[11px] text-slate-400">
                 Kowloon West heat-health digital twin · 深水埗 / 油尖旺 · first-principles Gagge + M/M/c
+                {scenarioId ? ` · ${scenarioId}` : ""}
               </p>
             </div>
-          </div>
+          </button>
           <div className="flex flex-wrap items-center gap-2">
             <BriefingButton />
             <ExportReport />
@@ -70,6 +76,19 @@ export function Header() {
           </div>
         </div>
 
+        {compact ? (
+          <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[10px] text-slate-400">
+            <span>{impact.admissionsAverted.toFixed(1)} averted</span>
+            <span>{snapshot.regionalMeanWbgt.toFixed(1)}° WBGT</span>
+            <span>{(snapshot.clusterBedStress * 100).toFixed(1)}% beds</span>
+            <span>solar {elev.toFixed(1)}° · breeze {(forcing.seaBreezeScale * 100).toFixed(0)}%</span>
+            <button type="button" className="text-cyan-300" onClick={() => toggleDrawer("header")}>
+              expand telemetry
+            </button>
+          </div>
+        ) : null}
+
+        <div className={compact ? "sr-only" : ""}>
         <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5" data-testid="mission-strip">
           <Hero
             label="24h admissions averted"
@@ -152,6 +171,7 @@ export function Header() {
           <span>episode {episodeId}</span>
         </div>
         <CausalStrip />
+        </div>
       </div>
     </header>
   );

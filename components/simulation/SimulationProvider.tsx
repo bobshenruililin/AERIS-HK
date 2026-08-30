@@ -44,6 +44,26 @@ import {
 } from "@/lib/cool-roof-optimiser";
 import { applyEpisodeAnomaly, CURRENT_EPISODE_ID, episodeById } from "@/lib/decade";
 import { makeAuditEvent, type PolicyAuditEvent } from "@/lib/audit";
+import {
+  DEFAULT_HUD_LAYERS,
+  DEFAULT_HUD_PRESET,
+  HUD_PRESETS,
+  type DrawerId,
+  type HudLayers,
+  type HudPresetId,
+  type InspectorTab,
+  type ScreenAnchor,
+} from "@/lib/hud";
+import { DEFAULT_PHYSICS_FORCING, type PhysicsForcing } from "@/lib/physics-forcing";
+import {
+  applyScenarioEnvelope,
+  scenarioById,
+  type StressScenarioId,
+} from "@/lib/scenarios";
+import type { MonteCarloResult } from "@/lib/monte-carlo";
+import { runMonteCarloAsync } from "@/lib/monte-carlo-client";
+import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
+import { buildingCentroid } from "@/lib/spatial-data";
 
 interface SimulationContextValue {
   buildings: BuildingFeature[];
@@ -78,6 +98,26 @@ interface SimulationContextValue {
   setEpisodeId: (id: string) => void;
   neonArchive: { neon: boolean; persisted: number; claimUrl: string | null } | null;
   auditLog: PolicyAuditEvent[];
+  hudPreset: HudPresetId;
+  setHudPreset: (id: HudPresetId) => void;
+  commandPaletteOpen: boolean;
+  setCommandPaletteOpen: (open: boolean) => void;
+  hudLayers: HudLayers;
+  setHudLayer: (key: keyof HudLayers, value: boolean) => void;
+  inspectorTab: InspectorTab;
+  setInspectorTab: (tab: InspectorTab) => void;
+  drawerOverride: Partial<Record<DrawerId, boolean>>;
+  toggleDrawer: (id: DrawerId) => void;
+  isDrawerExpanded: (id: DrawerId) => boolean;
+  inspectorAnchor: ScreenAnchor | null;
+  setInspectorAnchor: (anchor: ScreenAnchor | null) => void;
+  scenarioId: StressScenarioId | null;
+  applyScenario: (id: StressScenarioId) => void;
+  clearScenario: () => void;
+  forcing: PhysicsForcing;
+  monteCarlo: MonteCarloResult | null;
+  monteCarloRunning: boolean;
+  focusBuilding: (id: string) => void;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
@@ -156,6 +196,15 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     claimUrl: string | null;
   } | null>(null);
   const [auditLog, setAuditLog] = useState<PolicyAuditEvent[]>([]);
+  const [hudPreset, setHudPresetState] = useState<HudPresetId>(DEFAULT_HUD_PRESET);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [hudLayers, setHudLayers] = useState<HudLayers>(DEFAULT_HUD_LAYERS);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("biophysics");
+  const [drawerOverride, setDrawerOverride] = useState<Partial<Record<DrawerId, boolean>>>({});
+  const [inspectorAnchor, setInspectorAnchor] = useState<ScreenAnchor | null>(null);
+  const [scenarioId, setScenarioId] = useState<StressScenarioId | null>(null);
+  const [monteCarlo, setMonteCarlo] = useState<MonteCarloResult | null>(null);
+  const [monteCarloRunning, setMonteCarloRunning] = useState(false);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
   const budgetTouched = useRef(false);
@@ -263,10 +312,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const forcedEnvelope = useMemo(
+  const episodeEnvelope = useMemo(
     () => applyEpisodeAnomaly(envelope, episodeById(episodeId)),
     [envelope, episodeId],
   );
+  const scenario = scenarioId ? scenarioById(scenarioId) : null;
+  const forcedEnvelope = useMemo(
+    () => applyScenarioEnvelope(episodeEnvelope, scenario),
+    [episodeEnvelope, scenario],
+  );
+  const forcing = scenario?.forcing ?? DEFAULT_PHYSICS_FORCING;
   const totalRoofM2 = useMemo(() => totalRoofAreaM2(buildings), [buildings]);
 
   useEffect(() => {
@@ -318,16 +373,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [coolRoofCandidates, policy.coolRoofBudgetM2, totalRoofM2]);
 
   const cache = useMemo(
-    () => precomputeHourlyCache(policy, buildings, forcedEnvelope),
-    [policy, buildings, forcedEnvelope],
+    () => precomputeHourlyCache(policy, buildings, forcedEnvelope, forcing),
+    [policy, buildings, forcedEnvelope, forcing],
   );
   const impact = useMemo(
-    () => computePolicyImpact(policy, buildings, forcedEnvelope, haNowcast),
-    [policy, buildings, forcedEnvelope, haNowcast],
+    () => computePolicyImpact(policy, buildings, forcedEnvelope, haNowcast, forcing),
+    [policy, buildings, forcedEnvelope, haNowcast, forcing],
   );
   const snapshot = useMemo(
-    () => evaluateSystemAtHour(hour, policy, buildings, cache, forcedEnvelope, haNowcast),
-    [hour, policy, buildings, cache, forcedEnvelope, haNowcast],
+    () => evaluateSystemAtHour(hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing),
+    [hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing],
   );
 
   const hourlyFlat = useMemo(() => Array.from(cache.values()), [cache]);
@@ -391,6 +446,101 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     });
   }, [buildings]);
 
+  const setHudPreset = useCallback((id: HudPresetId) => {
+    setHudPresetState(id);
+    setDrawerOverride({});
+    setHudLayers(HUD_PRESETS[id].layers);
+  }, []);
+
+  const setHudLayer = useCallback((key: keyof HudLayers, value: boolean) => {
+    setHudLayers((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const toggleDrawer = useCallback((id: DrawerId) => {
+    setDrawerOverride((prev) => {
+      const spec = HUD_PRESETS[hudPreset].drawers[id];
+      const currentlyExpanded = prev[id] ?? spec === "expanded";
+      return { ...prev, [id]: !currentlyExpanded };
+    });
+  }, [hudPreset]);
+
+  const isDrawerExpanded = useCallback(
+    (id: DrawerId) => {
+      const spec = HUD_PRESETS[hudPreset].drawers[id];
+      if (drawerOverride[id] != null) return Boolean(drawerOverride[id]);
+      return spec === "expanded";
+    },
+    [hudPreset, drawerOverride],
+  );
+
+  const applyScenario = useCallback((id: StressScenarioId) => {
+    const next = scenarioById(id);
+    if (!next) return;
+    setScenarioId(id);
+    if (Object.keys(next.policyPatch).length > 0) {
+      setPolicyState((prev) => ({ ...prev, ...next.policyPatch }));
+    }
+    setHudPresetState(3);
+    setDrawerOverride({});
+    setHudLayers(HUD_PRESETS[3].layers);
+  }, []);
+
+  const clearScenario = useCallback(() => {
+    setScenarioId(null);
+  }, []);
+
+  const focusBuilding = useCallback(
+    (id: string) => {
+      const feature = buildings.find((b) => b.properties.id === id);
+      setSelectedId(id);
+      setInspectorTab("biophysics");
+      setHudPresetState(2);
+      setDrawerOverride({});
+      setHudLayers(HUD_PRESETS[2].layers);
+      if (typeof window !== "undefined") {
+        setInspectorAnchor({ x: window.innerWidth * 0.62, y: window.innerHeight * 0.4 });
+        if (feature) {
+          const [lon, lat] = buildingCentroid(feature);
+          window.dispatchEvent(new CustomEvent(TWIN_LOOKAT_EVENT, { detail: { lon, lat } }));
+        }
+      }
+    },
+    [buildings],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setMonteCarloRunning(true);
+    const timer = window.setTimeout(() => {
+      void runMonteCarloAsync({
+        scenarioAdmissions24h: impact.scenarioAdmissions24h,
+        scenarioBedDeficitPct: impact.scenarioBedDeficitPct,
+        acFailProbability: Math.max(0.08, forcing.acGridFailure),
+        ozoneIndex: forcing.ozoneIndex,
+        iterations: 1000,
+        seed: 20220719 + Math.round(policy.coolingShelters * 17 + policy.dhcOutreach),
+      }).then((result) => {
+        if (!cancelled) {
+          setMonteCarlo(result);
+          setMonteCarloRunning(false);
+        }
+      });
+    }, 320);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    impact.scenarioAdmissions24h,
+    impact.scenarioBedDeficitPct,
+    forcing.acGridFailure,
+    forcing.ozoneIndex,
+    policy.coolingShelters,
+    policy.dhcOutreach,
+    policy.coolRoofBudgetM2,
+    policy.acDeflectionBylaw,
+  ]);
+
   const value = useMemo<SimulationContextValue>(
     () => ({
       buildings,
@@ -425,6 +575,26 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       setEpisodeId,
       neonArchive,
       auditLog,
+      hudPreset,
+      setHudPreset,
+      commandPaletteOpen,
+      setCommandPaletteOpen,
+      hudLayers,
+      setHudLayer,
+      inspectorTab,
+      setInspectorTab,
+      drawerOverride,
+      toggleDrawer,
+      isDrawerExpanded,
+      inspectorAnchor,
+      setInspectorAnchor,
+      scenarioId,
+      applyScenario,
+      clearScenario,
+      forcing,
+      monteCarlo,
+      monteCarloRunning,
+      focusBuilding,
     }),
     [
       buildings,
@@ -453,6 +623,23 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       episodeId,
       neonArchive,
       auditLog,
+      hudPreset,
+      setHudPreset,
+      commandPaletteOpen,
+      hudLayers,
+      setHudLayer,
+      inspectorTab,
+      drawerOverride,
+      toggleDrawer,
+      isDrawerExpanded,
+      inspectorAnchor,
+      scenarioId,
+      applyScenario,
+      clearScenario,
+      forcing,
+      monteCarlo,
+      monteCarloRunning,
+      focusBuilding,
     ],
   );
 

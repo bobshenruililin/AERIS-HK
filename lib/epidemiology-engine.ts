@@ -19,12 +19,14 @@ import {
 } from "./constants";
 import { HOSPITALS, type HospitalSpec } from "./hospitals";
 import { solarRadiationIndex, roofAbsorbedShortwaveWm2 } from "./solar";
+import { canyonInsolation, roofAbsorbedWithCloudWm2 } from "./solar-engine";
 import { canyonMetrics } from "./canyon";
 import { clamp, lerp, wrapHour } from "./utils";
 import { getBuildings } from "./spatial-data";
 import type { HkoDiurnalEnvelope } from "./hko/types";
 import { sampleHkoEnvelope } from "./hko/envelope";
 import type { HaNowcast } from "./ha/types";
+import { DEFAULT_PHYSICS_FORCING, type PhysicsForcing } from "./physics-forcing";
 
 const STEFAN_LINEAR_HR = 4.7;
 const LEWIS_RATIO = 16.5;
@@ -46,13 +48,24 @@ function stullWetBulb(ta: number, rhFrac: number): number {
   );
 }
 
-function relativeHumidity(hour: number, envelope: HkoDiurnalEnvelope | null): number {
-  if (envelope) {
-    return clamp(sampleHkoEnvelope(envelope, hour).rhFrac, 0.25, 0.99);
-  }
+function relativeHumidity(
+  hour: number,
+  envelope: HkoDiurnalEnvelope | null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+): number {
   const h = wrapHour(hour);
-  const nightBoost = 0.5 + 0.5 * Math.cos(((h - 4) * Math.PI) / 12);
-  return clamp(0.7 + 0.12 * nightBoost, 0.4, 0.95);
+  let rh: number;
+  if (envelope) {
+    rh = clamp(sampleHkoEnvelope(envelope, hour).rhFrac, 0.25, 0.99);
+  } else {
+    const nightBoost = 0.5 + 0.5 * Math.cos(((h - 4) * Math.PI) / 12);
+    rh = clamp(0.7 + 0.12 * nightBoost, 0.4, 0.95);
+  }
+  const night = h >= 21 || h <= 6 ? 1 : 0;
+  if (night && forcing.nightRhFloor > 0) {
+    rh = Math.max(rh, forcing.nightRhFloor);
+  }
+  return clamp(rh, 0.25, 0.99);
 }
 
 /**
@@ -77,14 +90,29 @@ function regionalAirTemp(hour: number, coolRoofPercent: number, envelope: HkoDiu
   return 29.2 - roofCool * 0.55 + (2.4 - roofCool * 0.45) * cosine;
 }
 
-function effectiveAcHeat(building: BuildingFeature, policy: PolicyState): number {
+function effectiveAcHeat(
+  building: BuildingFeature,
+  policy: PolicyState,
+  hour = 15,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+): number {
   const deflect = policy.acDeflectionBylaw ? 0.58 : 1;
   const roof = 1 - 0.18 * localCoolRoofFraction(building, policy);
-  return building.properties.acAnthropogenicHeat * deflect * roof;
+  const h = wrapHour(hour);
+  const midnight = h >= 22 || h <= 4 ? 1 : 0;
+  const rejector = 1 + forcing.midnightAcRejectorBoost * midnight;
+  const failed = 1 - 0.72 * forcing.acGridFailure;
+  return building.properties.acAnthropogenicHeat * deflect * roof * rejector * failed;
 }
 
-export function thermalLagHours(building: BuildingFeature, policy: PolicyState): number {
-  return 6 * building.properties.subdividedFlatDensity * (effectiveAcHeat(building, policy) / 180);
+export function thermalLagHours(
+  building: BuildingFeature,
+  policy: PolicyState,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+): number {
+  const base = 6 * building.properties.subdividedFlatDensity * (effectiveAcHeat(building, policy, 15, forcing) / 180);
+  if (forcing.acGridFailure <= 0) return base;
+  return lerp(base, 0.22, forcing.acGridFailure);
 }
 
 function canyonAirTemp(
@@ -92,9 +120,10 @@ function canyonAirTemp(
   building: BuildingFeature,
   policy: PolicyState,
   envelope: HkoDiurnalEnvelope | null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): number {
   const regional = regionalAirTemp(hour, policy.coolRoofPercent, envelope);
-  const ac = effectiveAcHeat(building, policy);
+  const ac = effectiveAcHeat(building, policy, hour, forcing);
   const { svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
   const canyon =
     1.55 * building.properties.ventilationBlockage +
@@ -115,24 +144,38 @@ export function indoorAirTemp(
   building: BuildingFeature,
   policy: PolicyState,
   envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): number {
-  const lag = thermalLagHours(building, policy);
-  const laggedCanyon = canyonAirTemp(hour - lag, building, policy, envelope);
-  const liveCanyon = canyonAirTemp(hour, building, policy, envelope);
+  const lag = thermalLagHours(building, policy, forcing);
+  const laggedCanyon = canyonAirTemp(hour - lag, building, policy, envelope, forcing);
+  const liveCanyon = canyonAirTemp(hour, building, policy, envelope, forcing);
   const trap =
     2.55 * building.properties.subdividedFlatDensity +
-    0.012 * effectiveAcHeat(building, policy) +
+    0.012 * effectiveAcHeat(building, policy, hour, forcing) +
     0.85 * building.properties.ventilationBlockage -
     1.8 * localCoolRoofFraction(building, policy);
   const mass = 0.38 + 0.52 * building.properties.subdividedFlatDensity;
   const fabric = mass * (laggedCanyon + trap * 0.42) + (1 - mass) * liveCanyon;
   const shelter = nightShelterRelief(hour, policy);
   const shelteredMix = lerp(fabric, 27.4, shelter * 0.72);
-  return shelteredMix;
+  if (forcing.acGridFailure <= 0) return shelteredMix;
+  const mix = clamp(forcing.blackoutElapsedMin / 90, 0, 1) * forcing.acGridFailure;
+  const uncooled =
+    liveCanyon +
+    4.6 * mix * building.properties.subdividedFlatDensity +
+    3.2 * mix +
+    1.4 * building.properties.ventilationBlockage * mix;
+  return lerp(shelteredMix, uncooled, mix);
 }
 
-function globeTemp(ta: number, hour: number, blockage: number): number {
-  const solar = solarRadiationIndex(hour);
+function globeTemp(
+  ta: number,
+  hour: number,
+  blockage: number,
+  beamFrac = 1,
+  cloudCover = 0,
+): number {
+  const solar = solarRadiationIndex(hour) * beamFrac * (1 - 0.72 * clamp(cloudCover, 0, 1));
   return ta + 6.4 * solar * (0.35 + 0.65 * blockage) + 1.15 * blockage;
 }
 
@@ -147,6 +190,7 @@ export function gaggeTwoNode(
   indoorTa: number,
   outdoorTa: number,
   envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): BuildingHourState["gagge"] {
   const h = wrapHour(hour);
   const elderlyMet = lerp(1.0, 0.86, building.properties.elderlyRatio);
@@ -155,13 +199,23 @@ export function gaggeTwoNode(
   const W = 0;
   const vAir =
     0.12 +
-    0.95 * (1 - building.properties.ventilationBlockage) * (0.4 + 0.6 * solarRadiationIndex(h));
+    0.95 *
+      (1 - building.properties.ventilationBlockage) *
+      (0.4 + 0.6 * solarRadiationIndex(h)) *
+      (0.35 + 0.65 * forcing.seaBreezeScale);
   const hc = convectiveCoefficient(vAir);
   const Tsk = 35.7 - 0.027 * M + 0.18 * building.properties.subdividedFlatDensity;
-  const Tr = globeTemp(indoorTa, h, building.properties.ventilationBlockage);
+  const { hw } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
+  const insol = canyonInsolation({
+    hourHkt: h,
+    canyonHw: hw,
+    canyonAxisDeg: building.properties.headingDeg,
+    cloudCover: forcing.cloudCover,
+  });
+  const Tr = globeTemp(indoorTa, h, building.properties.ventilationBlockage, insol.directBeamFrac, forcing.cloudCover);
   const C = hc * (Tsk - indoorTa);
   const R = STEFAN_LINEAR_HR * (Tsk - Tr);
-  const rh = relativeHumidity(h, envelope);
+  const rh = relativeHumidity(h, envelope, forcing);
   const Pa = rh * satVaporKpa(indoorTa);
   const Psk = satVaporKpa(Tsk);
   const he = LEWIS_RATIO * hc;
@@ -204,13 +258,15 @@ export function buildingCardiovascularIndex(
   microWbgt: number,
   building: BuildingFeature,
   policy: PolicyState,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): number {
   const dhc = clamp(policy.dhcOutreach / 100, 0, 1);
   const elderly = building.properties.elderlyRatio * (1 - 0.34 * dhc);
   const density = building.properties.subdividedFlatDensity;
   const blockage = building.properties.ventilationBlockage * (policy.acDeflectionBylaw ? 0.9 : 1);
+  const ozone = 0.12 * forcing.ozoneIndex;
   const raw =
-    0.35 * (microWbgt / 35) + 0.28 * density + 0.22 * elderly + 0.15 * blockage;
+    0.35 * (microWbgt / 35) + 0.28 * density + 0.22 * elderly + 0.15 * blockage + ozone;
   return clamp(raw * 100, 0, 100);
 }
 
@@ -235,20 +291,38 @@ export function evaluateBuildingAtHour(
   hour: number,
   policy: PolicyState,
   envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): BuildingHourState {
-  const outdoorTa = canyonAirTemp(hour, building, policy, envelope);
-  const indoorTa = indoorAirTemp(hour, building, policy, envelope);
-  const rh = relativeHumidity(hour, envelope);
+  const outdoorTa = canyonAirTemp(hour, building, policy, envelope, forcing);
+  const indoorTa = indoorAirTemp(hour, building, policy, envelope, forcing);
+  const rh = relativeHumidity(hour, envelope, forcing);
   const twOut = stullWetBulb(outdoorTa, rh);
   const twIn = stullWetBulb(indoorTa, Math.min(0.92, rh + 0.04));
-  const tgOut = globeTemp(outdoorTa, hour, building.properties.ventilationBlockage);
-  const tgIn = globeTemp(indoorTa, hour, 0.85);
+  const { hw, svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
+  const insol = canyonInsolation({
+    hourHkt: hour,
+    canyonHw: hw,
+    canyonAxisDeg: building.properties.headingDeg,
+    cloudCover: forcing.cloudCover,
+  });
+  const tgOut = globeTemp(
+    outdoorTa,
+    hour,
+    building.properties.ventilationBlockage,
+    insol.directBeamFrac,
+    forcing.cloudCover,
+  );
+  const tgIn = globeTemp(indoorTa, hour, 0.85, insol.directBeamFrac, forcing.cloudCover);
   const canyonWbgt = wbgtOutdoor(outdoorTa, twOut, tgOut);
   const indoorWbgt = wbgtIndoor(indoorTa, twIn, tgIn);
   const microWbgt = 0.68 * indoorWbgt + 0.32 * canyonWbgt;
-  const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa, envelope);
-  const cvi = buildingCardiovascularIndex(microWbgt, building, policy);
-  const { hw, svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
+  const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa, envelope, forcing);
+  const cvi = buildingCardiovascularIndex(microWbgt, building, policy, forcing);
+  const coolRoof = localCoolRoofFraction(building, policy) >= 0.99;
+  const roofAbsorbed =
+    forcing.cloudCover > 0
+      ? roofAbsorbedWithCloudWm2(hour, coolRoof, forcing.cloudCover)
+      : roofAbsorbedShortwaveWm2(hour, coolRoof);
   return {
     buildingId: building.properties.id,
     hour: wrapHour(hour),
@@ -262,11 +336,16 @@ export function evaluateBuildingAtHour(
     cvi,
     cviTier: classifyCvi(cvi),
     gagge,
-    thermalLagHours: thermalLagHours(building, policy),
+    thermalLagHours: thermalLagHours(building, policy, forcing),
     cardiovascularStrain: bishaiCardiovascularStrain(microWbgt, gagge.coreTempC, building, policy),
     skyViewFactor: svf,
     canyonAspect: hw,
-    roofAbsorbedWm2: roofAbsorbedShortwaveWm2(hour, localCoolRoofFraction(building, policy) >= 0.99),
+    roofAbsorbedWm2: roofAbsorbed,
+    solarElevationDeg: insol.elevationDeg,
+    solarAzimuthDeg: insol.azimuthDeg,
+    canyonDirectBeamFrac: insol.directBeamFrac,
+    canyonShadowed: insol.shadowed,
+    indoorWetBulbC: twIn,
   };
 }
 
@@ -295,6 +374,11 @@ function interpolateBuildingState(
     skyViewFactor: mix(a.skyViewFactor, b.skyViewFactor),
     canyonAspect: mix(a.canyonAspect, b.canyonAspect),
     roofAbsorbedWm2: mix(a.roofAbsorbedWm2, b.roofAbsorbedWm2),
+    solarElevationDeg: mix(a.solarElevationDeg ?? 0, b.solarElevationDeg ?? 0),
+    solarAzimuthDeg: mix(a.solarAzimuthDeg ?? 0, b.solarAzimuthDeg ?? 0),
+    canyonDirectBeamFrac: mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1),
+    canyonShadowed: mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1) < 0.5,
+    indoorWetBulbC: mix(a.indoorWetBulbC ?? a.wetBulbTemp, b.indoorWetBulbC ?? b.wetBulbTemp),
     gagge: {
       metabolicRate: mix(a.gagge.metabolicRate, b.gagge.metabolicRate),
       externalWork: mix(a.gagge.externalWork, b.gagge.externalWork),
@@ -315,16 +399,17 @@ export function evaluateBuildingInterpolated(
   policy: PolicyState,
   cache?: Map<string, BuildingHourState>,
   envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): BuildingHourState {
   const h = wrapHour(hour);
   const h0 = Math.floor(h);
   const h1 = (h0 + 1) % 24;
   const t = h - h0;
   if (t < 1e-6) {
-    return cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope);
+    return cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing);
   }
-  const a = cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope);
-  const b = cache?.get(`${building.properties.id}:${h1}`) ?? evaluateBuildingAtHour(building, h1, policy, envelope);
+  const a = cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing);
+  const b = cache?.get(`${building.properties.id}:${h1}`) ?? evaluateBuildingAtHour(building, h1, policy, envelope, forcing);
   return interpolateBuildingState(a, b, t, h);
 }
 
@@ -531,8 +616,11 @@ export function evaluateSystemAtHour(
   cache?: Map<string, BuildingHourState>,
   envelope: HkoDiurnalEnvelope | null = null,
   nowcast: HaNowcast | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): SystemHourSnapshot {
-  const buildingStates = buildings.map((b) => evaluateBuildingInterpolated(b, hour, policy, cache, envelope));
+  const buildingStates = buildings.map((b) =>
+    evaluateBuildingInterpolated(b, hour, policy, cache, envelope, forcing),
+  );
   const hospitals = HOSPITALS.map((spec) =>
     evaluateHospital(spec, hour, buildingStates, buildings, policy, nowcast),
   );
@@ -561,11 +649,12 @@ export function precomputeHourlyCache(
   policy: PolicyState,
   buildings: BuildingFeature[] = getBuildings(),
   envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): Map<string, BuildingHourState> {
   const cache = new Map<string, BuildingHourState>();
   for (const building of buildings) {
     for (let hour = 0; hour < 24; hour += 1) {
-      cache.set(`${building.properties.id}:${hour}`, evaluateBuildingAtHour(building, hour, policy, envelope));
+      cache.set(`${building.properties.id}:${hour}`, evaluateBuildingAtHour(building, hour, policy, envelope, forcing));
     }
   }
   return cache;
@@ -576,9 +665,10 @@ export function computePolicyImpact(
   buildings: BuildingFeature[] = getBuildings(),
   envelope: HkoDiurnalEnvelope | null = null,
   nowcast: HaNowcast | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): PolicyImpact {
-  const baselineCache = precomputeHourlyCache(BASELINE_POLICY, buildings, envelope);
-  const scenarioCache = precomputeHourlyCache(policy, buildings, envelope);
+  const baselineCache = precomputeHourlyCache(BASELINE_POLICY, buildings, envelope, forcing);
+  const scenarioCache = precomputeHourlyCache(policy, buildings, envelope, forcing);
   let baselineAdmissions24h = 0;
   let scenarioAdmissions24h = 0;
   let baselineMort = 0;
@@ -590,8 +680,8 @@ export function computePolicyImpact(
   const hourlyScenarioArrivals: number[] = [];
 
   for (let hour = 0; hour < 24; hour += 1) {
-    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope, nowcast);
-    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope, nowcast);
+    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope, nowcast, forcing);
+    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope, nowcast, forcing);
     hourlyBaselineArrivals.push(base.totalCat13Arrivals);
     hourlyScenarioArrivals.push(scen.totalCat13Arrivals);
     baselineAdmissions24h += base.totalCat13Arrivals;

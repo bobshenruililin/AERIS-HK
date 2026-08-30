@@ -152,6 +152,16 @@ export interface BuildingHourState {
   skyViewFactor: number;
   canyonAspect: number;
   roofAbsorbedWm2: number;
+  /** Astronomical solar elevation at the HK centroid (solar-engine.ts). */
+  solarElevationDeg: number;
+  /** Astronomical solar azimuth clockwise from north. */
+  solarAzimuthDeg: number;
+  /** Remaining direct-beam fraction on the canyon floor after wall occlusion. */
+  canyonDirectBeamFrac: number;
+  /** True when the canyon floor is in geometric shadow. */
+  canyonShadowed: boolean;
+  /** Indoor wet-bulb after AC-grid / blackout forcing. */
+  indoorWetBulbC: number;
 }
 
 export interface TriageMix {
