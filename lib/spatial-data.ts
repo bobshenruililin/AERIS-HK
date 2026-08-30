@@ -533,14 +533,30 @@ function buildFeature(street: StreetBlueprint, lot: LotOverride, index: number, 
   };
 }
 
+function densifyLots(street: StreetBlueprint): LotOverride[] {
+  const target = 14;
+  if (street.lots.length >= target) return street.lots;
+  const extra: LotOverride[] = [];
+  for (let i = street.lots.length; i < target; i += 1) {
+    extra.push({
+      slug: `x${i + 1}`,
+      nameEn: `${street.nameEn} Infill Tong Lau`,
+      nameZh: `${street.nameZh}加密唐樓`,
+      address: String(210 + i * 6),
+    });
+  }
+  return [...street.lots, ...extra];
+}
+
 let cachedCollection: BuildingFeatureCollection | null = null;
 
 export function getBuildingCollection(): BuildingFeatureCollection {
   if (cachedCollection) return cachedCollection;
   const features: BuildingFeature[] = [];
   for (const street of STREETS) {
-    street.lots.forEach((lot, index) => {
-      features.push(buildFeature(street, lot, index, street.lots.length));
+    const lots = densifyLots(street);
+    lots.forEach((lot, index) => {
+      features.push(buildFeature(street, lot, index, lots.length));
     });
   }
   if (features.length < 50) {

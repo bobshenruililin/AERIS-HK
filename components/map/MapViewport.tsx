@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { TwinCanvas } from "./TwinCanvas";
+import { CinematicPlate } from "@/components/assets/CinematicPlate";
 
 const AERISMap = dynamic(() => import("./AERISMap"), {
   ssr: false,
@@ -46,6 +47,7 @@ export function MapViewport() {
 
   return (
     <div className="absolute inset-0 bg-[#05070c]" data-testid="map-viewport">
+      <CinematicPlate />
       <TwinCanvas />
       {gpu ? (
         <div className="absolute inset-0" data-testid="gpu-twin">

@@ -42,6 +42,8 @@ import {
   sameIdSet,
   totalRoofAreaM2,
 } from "@/lib/cool-roof-optimiser";
+import { applyEpisodeAnomaly, CURRENT_EPISODE_ID, episodeById } from "@/lib/decade";
+import { makeAuditEvent, type PolicyAuditEvent } from "@/lib/audit";
 
 interface SimulationContextValue {
   buildings: BuildingFeature[];
@@ -72,6 +74,10 @@ interface SimulationContextValue {
   totalRoofM2: number;
   focusedHospital: HospitalCode | null;
   setFocusedHospital: (code: HospitalCode | null) => void;
+  episodeId: string;
+  setEpisodeId: (id: string) => void;
+  neonArchive: { neon: boolean; persisted: number; claimUrl: string | null } | null;
+  auditLog: PolicyAuditEvent[];
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
@@ -143,6 +149,13 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [haError, setHaError] = useState<string | null>(null);
   const [coolRoofPlan, setCoolRoofPlan] = useState<CoolRoofPlan | null>(null);
   const [focusedHospital, setFocusedHospital] = useState<HospitalCode | null>(null);
+  const [episodeId, setEpisodeId] = useState(CURRENT_EPISODE_ID);
+  const [neonArchive, setNeonArchive] = useState<{
+    neon: boolean;
+    persisted: number;
+    claimUrl: string | null;
+  } | null>(null);
+  const [auditLog, setAuditLog] = useState<PolicyAuditEvent[]>([]);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
   const budgetTouched = useRef(false);
@@ -230,6 +243,30 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/episodes", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((payload: { neon?: boolean; persisted?: number; claimUrl?: string | null }) => {
+        if (cancelled) return;
+        setNeonArchive({
+          neon: Boolean(payload.neon),
+          persisted: Number(payload.persisted ?? 0),
+          claimUrl: payload.claimUrl ?? null,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setNeonArchive({ neon: false, persisted: 0, claimUrl: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const forcedEnvelope = useMemo(
+    () => applyEpisodeAnomaly(envelope, episodeById(episodeId)),
+    [envelope, episodeId],
+  );
   const totalRoofM2 = useMemo(() => totalRoofAreaM2(buildings), [buildings]);
 
   useEffect(() => {
@@ -242,14 +279,14 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   const coolRoofCandidates = useMemo(
     () =>
-      rankCoolRoofCandidates(buildings, envelope, {
+      rankCoolRoofCandidates(buildings, forcedEnvelope, {
         ...policy,
         coolRoofPercent: 0,
         coolRoofTargetIds: [],
       }),
     // Ranking is local-only: ignore budget, targets, and district percent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buildings, envelope, policy.coolingShelters, policy.dhcOutreach, policy.acDeflectionBylaw],
+    [buildings, forcedEnvelope, policy.coolingShelters, policy.dhcOutreach, policy.acDeflectionBylaw],
   );
 
   useEffect(() => {
@@ -281,16 +318,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [coolRoofCandidates, policy.coolRoofBudgetM2, totalRoofM2]);
 
   const cache = useMemo(
-    () => precomputeHourlyCache(policy, buildings, envelope),
-    [policy, buildings, envelope],
+    () => precomputeHourlyCache(policy, buildings, forcedEnvelope),
+    [policy, buildings, forcedEnvelope],
   );
   const impact = useMemo(
-    () => computePolicyImpact(policy, buildings, envelope, haNowcast),
-    [policy, buildings, envelope, haNowcast],
+    () => computePolicyImpact(policy, buildings, forcedEnvelope, haNowcast),
+    [policy, buildings, forcedEnvelope, haNowcast],
   );
   const snapshot = useMemo(
-    () => evaluateSystemAtHour(hour, policy, buildings, cache, envelope, haNowcast),
-    [hour, policy, buildings, cache, envelope, haNowcast],
+    () => evaluateSystemAtHour(hour, policy, buildings, cache, forcedEnvelope, haNowcast),
+    [hour, policy, buildings, cache, forcedEnvelope, haNowcast],
   );
 
   const hourlyFlat = useMemo(() => Array.from(cache.values()), [cache]);
@@ -337,6 +374,13 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const setPolicy = useCallback((patch: Partial<PolicyState>) => {
     if (patch.coolRoofBudgetM2 != null) budgetTouched.current = true;
     setPolicyState((prev) => ({ ...prev, ...patch }));
+    const event = makeAuditEvent(patch as Record<string, unknown>);
+    setAuditLog((prev) => [...prev.slice(-39), event]);
+    void fetch("/api/audit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(event),
+    }).catch(() => undefined);
   }, []);
 
   const resetPolicy = useCallback(() => {
@@ -367,7 +411,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       setHoveredId,
       analytics,
       cache,
-      envelope,
+      envelope: forcedEnvelope,
       envelopeError,
       spatial,
       haNowcast,
@@ -377,6 +421,10 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       totalRoofM2,
       focusedHospital,
       setFocusedHospital,
+      episodeId,
+      setEpisodeId,
+      neonArchive,
+      auditLog,
     }),
     [
       buildings,
@@ -393,7 +441,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       hoveredId,
       analytics,
       cache,
-      envelope,
+      forcedEnvelope,
       envelopeError,
       spatial,
       haNowcast,
@@ -402,6 +450,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       coolRoofCandidates,
       totalRoofM2,
       focusedHospital,
+      episodeId,
+      neonArchive,
+      auditLog,
     ],
   );
 

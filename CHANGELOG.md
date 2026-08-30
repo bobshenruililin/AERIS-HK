@@ -2,6 +2,16 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.8.0] — 2026-08-30
+
+### Added
+
+- Decade observatory: replay 2016–2026 heat episodes against the live HKO envelope; Bishai-style RR scales cool-roof counterfactuals; cumulative Σ if today's roofs had been locked each summer.
+- Neon claimable archive (`NEON_DATABASE_URL`) for episode rows and policy audit; in-session audit trail on every policy mutation.
+- Knapsack ensemble band (p10–p90) on local admissions averted.
+- City-scale infill (≥150 tong lau). Cinematic stills behind the twin (`public/decade`).
+- Design tokens, `docs/DECADE.md` ops wiki, Gmail `AERIS-HK/Decade` label for DH drafts.
+
 ## [0.7.0] — 2026-08-30
 
 ### Added

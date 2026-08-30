@@ -116,6 +116,10 @@ export interface CoolRoofPlan {
   windowSelectedIds: string[];
   windowAdmissionsAverted: number;
   queryLatencyMs: number;
+  ensembleP10?: number;
+  ensembleP50?: number;
+  ensembleP90?: number;
+  ensembleDraws?: number;
 }
 
 export interface GaggeNodeState {

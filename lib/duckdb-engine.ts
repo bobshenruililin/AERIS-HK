@@ -17,6 +17,7 @@ import { encodeCoolRoofCandidatesIpc, encodeHourlyIpc, hourlyRowsFromState, type
 import { bindCoolRoofSql } from "./cool-roof-sql";
 import { emptyCoolRoofPlan, planFromSelected, selectCoolRoofsGreedyJs, totalRoofAreaM2 } from "./cool-roof-optimiser";
 import { attachWindowComparison, selectCoolRoofsKnapsack } from "./cool-roof-knapsack";
+import { knapsackEnsembleBand } from "./ensemble";
 
 type DuckDbModule = typeof import("@duckdb/duckdb-wasm");
 type AsyncDuckDB = import("@duckdb/duckdb-wasm").AsyncDuckDB;
@@ -329,7 +330,16 @@ export async function optimiseCoolRoofTargets(args: {
   budgetM2: number;
   totalRoofM2: number;
 }): Promise<CoolRoofPlan> {
-  return enqueueDuckDb(() => optimiseCoolRoofTargetsExclusive(args));
+  return enqueueDuckDb(() => optimiseCoolRoofTargetsExclusive(args)).then((plan) => {
+    const band = knapsackEnsembleBand(args.candidates, args.budgetM2, args.totalRoofM2, 12);
+    return {
+      ...plan,
+      ensembleP10: band.p10,
+      ensembleP50: band.p50,
+      ensembleP90: band.p90,
+      ensembleDraws: band.draws,
+    };
+  });
 }
 
 async function optimiseCoolRoofTargetsExclusive(args: {

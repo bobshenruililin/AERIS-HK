@@ -53,7 +53,7 @@ describe("HK80 shoelace roof area", () => {
       );
     }
     const total = totalRoofAreaM2(buildings);
-    assert.ok(total > 8_000 && total < 40_000, `total roof ${total}`);
+    assert.ok(total > 8_000 && total < 80_000, `total roof ${total}`);
   });
 
   it("round-trips roof_m2 through Arrow IPC", () => {

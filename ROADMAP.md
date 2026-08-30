@@ -59,9 +59,14 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Causal strip (heat → Gagge → CVI → A&E → M/M/c → knapsack) and briefing tour
 - [x] Expanded Sham Shui Po / Yau Tsim Mong street stock (Ki Lung, Kweilin, Portland, Reclamation)
 
-## Phase 3 — Operationalisation
+## Phase 3 — Decade observatory
 
-- [ ] Authentication and audit log for HA/DH users
+- [x] 2016–2026 episode replay + cumulative cool-roof counterfactual
+- [x] Neon claimable archive + policy audit log
+- [x] Knapsack ensemble uncertainty band
+- [x] City-scale infill and cinematic stills
+- [ ] Figma / Notion / Canva / Drive MCP (requires Cursor desktop authentication)
+- [ ] Authentication and audit log for HA/DH users (login)
 - [ ] Traditional Chinese screen-reader pass and WCAG contrast on glass panels
 - [ ] Automated visual regression of the Kowloon view state
 - [ ] GPU particle layer (WebGPU compute) if ScatterplotLayer saturates at 60 FPS

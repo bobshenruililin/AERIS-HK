@@ -19,7 +19,7 @@ When given a `/goal` (or any multi-step mission):
 - Convert exclusively through `lib/crs.ts` (International 1924 TM + Helmert TOWGS84) or PostGIS `ST_Transform`. Do not invent linear offsets.
 - Call `assertWgs84` for any new Kowloon coordinate. Reject geometry outside the Hong Kong envelope.
 - DuckDB tables may store both CRS representations via Arrow IPC snapshots; map layers consume 4326 only.
-- Never import `lib/postgis/*` or `pg` from `"use client"` modules. Spatial APIs are Node Route Handlers.
+- Never import `lib/postgis/*`, `lib/neon-archive.ts`, or `pg` from `"use client"` modules. Spatial and Neon APIs are Node Route Handlers.
 
 ## WebGL / WASM SSR hydration defense
 

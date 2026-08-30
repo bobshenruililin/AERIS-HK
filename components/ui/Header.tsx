@@ -23,6 +23,7 @@ export function Header() {
     coolRoofPlan,
     policy,
     impact,
+    episodeId,
   } = useSimulation();
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const elev = solarElevationDeg(hour);
@@ -148,6 +149,7 @@ export function Header() {
               ? `exact knapsack · ${coolRoofPlan.rankEngine === "duckdb-wasm" ? "DuckDB windows rank" : "JS rank"}`
               : "optimiser…"}
           </span>
+          <span>episode {episodeId}</span>
         </div>
         <CausalStrip />
       </div>
