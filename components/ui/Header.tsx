@@ -85,10 +85,14 @@ export function Header() {
         {compact ? (
           <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[10px] text-slate-400">
             <span>
-              <FormulaTip id="dlnm-rr">{impact.admissionsAverted.toFixed(1)} averted</FormulaTip>
+              <CitationMark highlight="rr">
+                <FormulaTip id="dlnm-rr">{impact.admissionsAverted.toFixed(1)} averted</FormulaTip>
+              </CitationMark>
             </span>
             <span>
-              <FormulaTip id="utci">{snapshot.regionalMeanWbgt.toFixed(1)}° WBGT</FormulaTip>
+              <CitationMark highlight="wbgt">
+                <FormulaTip id="utci">{snapshot.regionalMeanWbgt.toFixed(1)}° WBGT</FormulaTip>
+              </CitationMark>
             </span>
             <span>{(snapshot.clusterBedStress * 100).toFixed(1)}% beds</span>
             <span>solar {elev.toFixed(1)}° · breeze {(forcing.seaBreezeScale * 100).toFixed(0)}%</span>
@@ -107,6 +111,7 @@ export function Header() {
             testId="mission-admissions-averted"
             tone="emerald"
             formulaId="dlnm-rr"
+            citation="rr"
           />
           <Hero
             label="Roofs locked"
@@ -124,13 +129,7 @@ export function Header() {
             sub={`m² of ${Math.round(policy.coolRoofBudgetM2)}`}
             tone="amber"
           />
-          <Hero
-            label="Micro-WBGT"
-            zh="微氣候濕球黑球"
-            value={`${snapshot.regionalMeanWbgt.toFixed(1)}°`}
-            tone="cyan"
-            formulaId="utci"
-          />
+          <Hero label="Micro-WBGT" zh="微氣候濕球黑球" value={`${snapshot.regionalMeanWbgt.toFixed(1)}°`} tone="cyan" formulaId="utci" citation="wbgt" />
           <Hero label="HA bed stress" zh="病床壓力" value={`${bedPct.toFixed(1)}%`} tone={bedPct >= 100 ? "red" : "cyan"} />
         </div>
 
@@ -236,7 +235,7 @@ function Hero({
   testId?: string;
   tone: "emerald" | "amber" | "cyan" | "red";
   formulaId?: "utci" | "pmv" | "dlnm-rr";
-  citation?: "roofs" | "knapsack";
+  citation?: "roofs" | "knapsack" | "rr" | "wbgt";
 }) {
   const color =
     tone === "emerald"

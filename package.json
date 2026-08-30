@@ -60,7 +60,7 @@
     "server-only": "^0.0.1",
     "tailwind-merge": "^2.6.0",
     "ws": "^8.21.3",
-    "zod": "^3.24.4"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.6.4",

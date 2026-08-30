@@ -14,7 +14,7 @@ All notable changes to AERIS-HK are documented here.
 
 ### Changed
 
-- Copilot ambient ΔT shifts the live/scenario HKO envelope through `shiftEnvelopeTemp` before Gagge cache recompute.
+- Copilot ambient ΔT shifts the live/scenario HKO envelope through `shiftEnvelopeTemp` before Gagge cache recompute. Zod is 3.25.x so the Vercel AI SDK can import `zod/v3`.
 
 ## [0.12.0] — 2026-08-30
 
