@@ -87,7 +87,7 @@ Authoritative CRS: **HK1980 Grid (EPSG:2326)** on `properties.hk80` and PostGIS 
 
 | Model | Identity / solver | Module |
 | --- | --- | --- |
-| Gagge two-node | \(S = M - W - E - R - C\) | `lib/thermal-engine.ts` |
+| Gagge two-node | \(S = M - W - E - R - C\) | `lib/epidemiology-engine.ts` |
 | Fanger PMV–PPD | ISO 7730, Newton \(T_{cl}\) | `lib/biophysics.ts` |
 | WBGT | Liljegren-class iteration | `lib/biophysics.ts` |
 | 劏房 4 h battery | Night-only Euler, \(\tau=4\,\mathrm{h}\) | `lib/biophysics.ts` |
@@ -147,7 +147,7 @@ npx tsc --noEmit
 npm run test:crs && npm run test:ha && npm run test:cool-roof
 npm run test:twin && npm run test:decade && npm run test:solar
 npm run test:mc && npm run test:scenarios && npm run test:bio
-npm run test:h3 && npm run test:db
+npm run test:h3 && npm run test:db && npm run test:spatial
 npm run build
 ```
 

@@ -18,6 +18,7 @@ export function Header() {
     envelope,
     envelopeError,
     spatial,
+    spatialIndex,
     haNowcast,
     haError,
     coolRoofPlan,
@@ -157,6 +158,10 @@ export function Header() {
             {analytics
               ? `${analytics.engine}${analytics.arrowIpc ? " IPC" : ""} ${analytics.queryLatencyMs.toFixed(0)} ms`
               : "DuckDB warming"}
+          </span>
+          <span data-testid="spatial-grid-stats">
+            ENU grid {spatialIndex.vectorCount.toLocaleString()} · bbox {spatialIndex.bboxMs.toFixed(2)} ms · kNN{" "}
+            {spatialIndex.knnMs.toFixed(2)} ms
           </span>
           <span>
             {spatial.authority === "postgis-hk80"

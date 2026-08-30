@@ -7,8 +7,10 @@ import {
   SOLAR_ENGINE_LON,
   canyonDirectBeamFraction,
   canyonInsolation,
+  castGroundShadow,
   peiHoCanyonInsolation,
   solarPositionHk,
+  sunEnuFromLookAt,
 } from "../lib/solar-engine";
 
 describe("solar-engine HK centroid", () => {
@@ -62,5 +64,14 @@ describe("solar-engine HK centroid", () => {
       cloudCover: 1,
     });
     assert.ok(overcast.directBeamWm2 < clear.directBeamWm2);
+  });
+
+  it("casts a roof vertex down-sun onto the ground plane", () => {
+    const shadow = castGroundShadow({ east: 0, north: 0, up: 40 }, [0.4, -0.2, -0.8]);
+    assert.ok(Math.abs(shadow.up) < 0.1);
+    assert.ok(shadow.east > 0);
+    assert.ok(shadow.north < 0);
+    const sun = sunEnuFromLookAt(0, 0, 55, 220, 2000);
+    assert.ok(sun.up > 200);
   });
 });

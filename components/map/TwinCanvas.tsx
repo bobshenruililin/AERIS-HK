@@ -12,13 +12,16 @@ import { aggregateHeatPlumes } from "@/lib/h3-index";
 import type { BuildingFeature, HospitalCode, SystemHourSnapshot } from "@/lib/types";
 import type { HudLayers } from "@/lib/hud";
 import { advectWindParticles, createWindParticles, type WindParticle } from "@/lib/wind-field";
+import { castGroundShadow, solarPositionHk, sunEnuFromLookAt } from "@/lib/solar-engine";
 import {
   HARBOUR_TWIN_VIEW,
   KOWLOON_TWIN_VIEW,
   TWIN_FLYIN_EVENT,
   TWIN_LOOKAT_EVENT,
+  TWIN_ORBIT_EVENT,
   cameraBasis,
   lerpView,
+  orbitView,
   pickNearestId,
   projectEnu,
   wgs84ToEnu,
@@ -103,6 +106,7 @@ export function TwinCanvas() {
   const viewRef = useRef<TwinView>({ ...HARBOUR_TWIN_VIEW });
   const flyRef = useRef({ t0: 0, active: true });
   const lookRef = useRef<{ t0: number; from: TwinView; to: TwinView } | null>(null);
+  const orbitRef = useRef<{ active: boolean; t0: number; base: TwinView } | null>(null);
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
   const pickRef = useRef<Array<{ id: string; x: number; y: number; depth: number; visible: boolean }>>([]);
 
@@ -127,6 +131,7 @@ export function TwinCanvas() {
   const spines = useMemo(() => streetSpinesFromBuildings(sim.buildings), [sim.buildings]);
 
   const startFlyIn = useCallback(() => {
+    orbitRef.current = null;
     viewRef.current = { ...HARBOUR_TWIN_VIEW };
     flyRef.current = { t0: performance.now(), active: true };
   }, []);
@@ -137,6 +142,7 @@ export function TwinCanvas() {
     const onLook = (event: Event) => {
       const detail = (event as CustomEvent<{ lon: number; lat: number }>).detail;
       if (!detail) return;
+      orbitRef.current = null;
       const enu = wgs84ToEnu(detail.lon, detail.lat, 0);
       lookRef.current = {
         t0: performance.now(),
@@ -151,11 +157,22 @@ export function TwinCanvas() {
       };
       flyRef.current.active = false;
     };
+    const onOrbit = () => {
+      if (orbitRef.current?.active) {
+        orbitRef.current = null;
+        return;
+      }
+      flyRef.current.active = false;
+      lookRef.current = null;
+      orbitRef.current = { active: true, t0: performance.now(), base: { ...viewRef.current } };
+    };
     window.addEventListener(TWIN_FLYIN_EVENT, onFly);
     window.addEventListener(TWIN_LOOKAT_EVENT, onLook);
+    window.addEventListener(TWIN_ORBIT_EVENT, onOrbit);
     return () => {
       window.removeEventListener(TWIN_FLYIN_EVENT, onFly);
       window.removeEventListener(TWIN_LOOKAT_EVENT, onLook);
+      window.removeEventListener(TWIN_ORBIT_EVENT, onOrbit);
     };
   }, [startFlyIn]);
 
@@ -187,6 +204,8 @@ export function TwinCanvas() {
         } else {
           viewRef.current = lerpView(lookRef.current.from, lookRef.current.to, t);
         }
+      } else if (orbitRef.current?.active) {
+        viewRef.current = orbitView(orbitRef.current.base, now - orbitRef.current.t0);
       }
       particlesRef.current = advectWindParticles(
         particlesRef.current,
@@ -323,6 +342,37 @@ function drawFrame(
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, w, h);
 
+  const astro = solarPositionHk(args.hour);
+  if (astro.elevationDeg > 1) {
+    const sunPos = sunEnuFromLookAt(
+      view.targetEast,
+      view.targetNorth,
+      astro.elevationDeg,
+      astro.azimuthDeg,
+      2200,
+    );
+    const sunP = projectEnu(sunPos, view, w, h, basis);
+    const ground = projectEnu({ east: view.targetEast, north: view.targetNorth, up: 4 }, view, w, h, basis);
+    if (sunP.visible) {
+      const ray = ctx.createLinearGradient(sunP.x, sunP.y, ground.x, ground.y);
+      ray.addColorStop(0, `rgba(255, 214, 140, ${0.5 + 0.2 * pulse})`);
+      ray.addColorStop(1, "rgba(255, 180, 80, 0)");
+      ctx.strokeStyle = ray;
+      ctx.lineWidth = 2.4 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(sunP.x, sunP.y);
+      ctx.lineTo(ground.x, ground.y);
+      ctx.stroke();
+      const disc = ctx.createRadialGradient(sunP.x, sunP.y, 2 * dpr, sunP.x, sunP.y, 28 * dpr);
+      disc.addColorStop(0, "rgba(255, 244, 200, 0.95)");
+      disc.addColorStop(1, "rgba(255, 180, 60, 0)");
+      ctx.fillStyle = disc;
+      ctx.beginPath();
+      ctx.arc(sunP.x, sunP.y, 28 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   if (!day) {
     ctx.fillStyle = "rgba(186,230,253,0.35)";
     for (let i = 0; i < 48; i += 1) {
@@ -367,6 +417,15 @@ function drawFrame(
     basis,
   );
   fillPoly(ctx, land, day ? "rgba(12, 18, 28, 0.96)" : "rgba(8, 12, 20, 0.97)", "rgba(15,23,42,0.8)", 1);
+
+  if (day && elev > 4) {
+    for (const mesh of args.meshes) {
+      const roofUp = mesh.height;
+      const shadow = mesh.ground.map((p) => castGroundShadow({ ...p, up: roofUp }, sun));
+      const projected = projectRing(shadow, view, w, h, basis);
+      fillPoly(ctx, projected, "rgba(2, 8, 18, 0.4)");
+    }
+  }
 
   if (args.layers.h3Hexes) {
     const hexes = aggregateHeatPlumes(args.buildings, args.snapshot.buildings, 10);
@@ -486,7 +545,17 @@ function drawFrame(
     const cviVal = cvi.get(mesh.id) ?? 0;
     if (args.layers.thermalShimmer && cviVal >= 58) {
       const base = projectEnu({ ...mesh.centroid, up: roofUp }, view, w, h, basis);
-      const tip = projectEnu({ ...mesh.centroid, up: roofUp + (cviVal - 50) * 2.6 }, view, w, h, basis);
+      const tip = projectEnu(
+        {
+          ...mesh.centroid,
+          east: mesh.centroid.east + Math.sin(args.now / 240 + mesh.centroid.north * 0.01) * 6,
+          up: roofUp + (cviVal - 50) * 2.6,
+        },
+        view,
+        w,
+        h,
+        basis,
+      );
       if (base.visible && tip.visible) {
         const plume = ctx.createLinearGradient(base.x, base.y, tip.x, tip.y);
         plume.addColorStop(0, rgba(color, 0.08));
@@ -539,17 +608,38 @@ function drawFrame(
   }
 
   if (args.layers.windVectors) {
-    ctx.fillStyle = day ? "rgba(34,211,238,0.45)" : "rgba(186,230,253,0.55)";
     for (const p of args.particles) {
+      const fade = Math.max(0.08, 0.62 * (1 - p.age / p.maxAge));
+      if (p.trail.length >= 2) {
+        ctx.beginPath();
+        let started = false;
+        for (const [lon, lat] of p.trail) {
+          const q = projectEnu(wgs84ToEnu(lon, lat, 6), view, w, h, basis);
+          if (!q.visible) continue;
+          if (!started) {
+            ctx.moveTo(q.x, q.y);
+            started = true;
+          } else {
+            ctx.lineTo(q.x, q.y);
+          }
+        }
+        if (started) {
+          ctx.strokeStyle = p.stalled
+            ? `rgba(148,163,184,${fade * 0.45})`
+            : p.venturi > 1.25
+              ? `rgba(251,191,36,${fade})`
+              : `rgba(34,211,238,${fade})`;
+          ctx.lineWidth = (p.stalled ? 0.7 : 1.05 + 0.7 * Math.min(1.4, p.venturi - 1)) * dpr;
+          ctx.stroke();
+        }
+      }
       const q = projectEnu(wgs84ToEnu(p.lon, p.lat, 6), view, w, h, basis);
       if (!q.visible) continue;
-      const a = Math.max(0.08, 0.55 * (1 - p.age / p.maxAge));
-      ctx.globalAlpha = a;
+      ctx.fillStyle = p.venturi > 1.25 ? `rgba(251,191,36,${fade})` : `rgba(34,211,238,${fade})`;
       ctx.beginPath();
-      ctx.arc(q.x, q.y, (1.6 + p.speed * 0.4) * dpr, 0, Math.PI * 2);
+      ctx.arc(q.x, q.y, (1.4 + p.speed * 0.38) * dpr, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
   }
 
   ctx.font = `${11 * dpr}px ui-monospace, monospace`;
@@ -594,5 +684,5 @@ function drawFrame(
   ctx.textAlign = "left";
   ctx.font = `${10 * dpr}px ui-monospace, monospace`;
   ctx.fillStyle = "rgba(125,211,252,0.7)";
-  ctx.fillText("SOFTWARE TWIN · WGS84 → ENU m · no HK80 on the projector", 16 * dpr, h - 16 * dpr);
+  ctx.fillText("SOFTWARE TWIN · WGS84 → ENU m · solar rays · Venturi streaks · no HK80 on the projector", 16 * dpr, h - 16 * dpr);
 }

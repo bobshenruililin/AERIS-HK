@@ -178,6 +178,50 @@ export function peiHoCanyonInsolation(hourHkt: number, cloudCover = 0): CanyonIn
   });
 }
 
+export interface EnuShadowPoint {
+  east: number;
+  north: number;
+  up: number;
+}
+
+/**
+ * Intersect a roof/wall vertex with the ground plane along the incoming
+ * solar travel vector (Deck.gl z-up, same convention as `sunDirectionVec`).
+ */
+export function castGroundShadow(
+  point: EnuShadowPoint,
+  sunTravel: [number, number, number],
+): EnuShadowPoint {
+  const sz = sunTravel[2];
+  if (sz >= -1e-4 || point.up <= 0.05) {
+    return { east: point.east, north: point.north, up: 0 };
+  }
+  const t = -point.up / sz;
+  return {
+    east: point.east + t * sunTravel[0],
+    north: point.north + t * sunTravel[1],
+    up: 0.05,
+  };
+}
+
+/** Apparent sun position in local ENU metres from a look-at. Azimuth clockwise from north. */
+export function sunEnuFromLookAt(
+  originEast: number,
+  originNorth: number,
+  elevationDeg: number,
+  azimuthDeg: number,
+  distanceM = 2400,
+): EnuShadowPoint {
+  const el = (elevationDeg * Math.PI) / 180;
+  const az = (azimuthDeg * Math.PI) / 180;
+  const horiz = Math.cos(el) * distanceM;
+  return {
+    east: originEast + Math.sin(az) * horiz,
+    north: originNorth + Math.cos(az) * horiz,
+    up: Math.max(28, Math.sin(el) * distanceM),
+  };
+}
+
 /** Roof still sees the sky; only the beam is cloud-scaled. */
 export function roofAbsorbedWithCloudWm2(hourHkt: number, coolRoof: boolean, cloudCover = 0): number {
   const pos = solarPositionHk(hourHkt);

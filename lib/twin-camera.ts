@@ -10,6 +10,7 @@ export const TWIN_ORIGIN = { lon: 114.1628, lat: 22.3307 } as const;
 
 export const TWIN_FLYIN_EVENT = "aeris-twin-flyin";
 export const TWIN_LOOKAT_EVENT = "aeris-twin-lookat";
+export const TWIN_ORBIT_EVENT = "aeris-twin-orbit";
 
 export interface EnuPoint {
   east: number;
@@ -79,6 +80,17 @@ export const KOWLOON_TWIN_VIEW = viewFromMapState(KOWLOON_VIEW);
 export function smoothstep(t: number): number {
   const x = clamp(t, 0, 1);
   return x * x * (3 - 2 * x);
+}
+
+export function orbitView(base: TwinView, elapsedMs: number, periodMs = 16000): TwinView {
+  const turns = elapsedMs / Math.max(1, periodMs);
+  const tau = turns * Math.PI * 2;
+  return {
+    ...base,
+    bearingDeg: base.bearingDeg + turns * 360,
+    pitchDeg: clamp(base.pitchDeg + 5.5 * Math.sin(tau), 38, 72),
+    distance: base.distance * (1 + 0.08 * Math.sin(tau * 0.5)),
+  };
 }
 
 export function lerpView(a: TwinView, b: TwinView, t: number): TwinView {

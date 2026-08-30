@@ -12,6 +12,18 @@ export interface WindParticle {
   age: number;
   maxAge: number;
   speed: number;
+  venturi: number;
+  stalled: boolean;
+  trail: LonLat[];
+}
+
+export interface WindStreak {
+  id: number;
+  path: LonLat[];
+  venturi: number;
+  stalled: boolean;
+  speed: number;
+  alpha: number;
 }
 
 export interface WindVector {
@@ -149,13 +161,18 @@ export function createWindParticles(seed = 7): WindParticle[] {
     return s / 4294967296;
   };
   for (let i = 0; i < PARTICLE_COUNT; i += 1) {
+    const lon = SPAWN_WEST + rnd() * (SPAWN_EAST - SPAWN_WEST);
+    const lat = SPAWN_SOUTH + rnd() * (SPAWN_NORTH - SPAWN_SOUTH);
     particles.push({
       id: i,
-      lon: SPAWN_WEST + rnd() * (SPAWN_EAST - SPAWN_WEST),
-      lat: SPAWN_SOUTH + rnd() * (SPAWN_NORTH - SPAWN_SOUTH),
+      lon,
+      lat,
       age: rnd() * 12,
       maxAge: 8 + rnd() * 10,
       speed: 1,
+      venturi: 1,
+      stalled: false,
+      trail: [[lon, lat]],
     });
   }
   return particles;
@@ -190,6 +207,8 @@ export function advectWindParticles(
       lat = SPAWN_SOUTH + 0.15 * r2 * (SPAWN_NORTH - SPAWN_SOUTH);
       age = 0;
     }
+    const trail = p.trail.length > 0 && age === 0 ? [[lon, lat] as LonLat] : [...p.trail, [lon, lat] as LonLat];
+    if (trail.length > 6) trail.shift();
     next[i] = {
       id: p.id,
       lon,
@@ -197,7 +216,26 @@ export function advectWindParticles(
       age,
       maxAge: p.maxAge,
       speed: wind.speed,
+      venturi: wind.venturi,
+      stalled: wind.stalled,
+      trail,
     };
   }
   return next;
+}
+
+export function windStreaksFromParticles(particles: WindParticle[]): WindStreak[] {
+  const streaks: WindStreak[] = [];
+  for (const p of particles) {
+    if (p.trail.length < 2) continue;
+    streaks.push({
+      id: p.id,
+      path: p.trail,
+      venturi: p.venturi,
+      stalled: p.stalled,
+      speed: p.speed,
+      alpha: Math.max(0.08, 1 - p.age / p.maxAge),
+    });
+  }
+  return streaks;
 }

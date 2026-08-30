@@ -21,6 +21,7 @@
     "test:bio": "tsx --test scripts/biophysics.test.ts",
     "test:h3": "tsx --test scripts/h3-index.test.ts",
     "test:db": "node --env-file=.env.local --import tsx --test scripts/db-schema.test.ts",
+    "test:spatial": "tsx --test scripts/spatial-grid.test.ts",
     "bench": "node --env-file=.env.local --import tsx scripts/benchmark.ts"
   },
   "dependencies": {

@@ -71,3 +71,19 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [ ] Automated visual regression of the Kowloon view state
 - [ ] GPU particle layer (WebGPU compute) if ScatterplotLayer saturates at 60 FPS
 - [ ] Durable observation store (Postgres/Redis) for the HKO ring buffer across serverless cold starts
+
+## Phase 4 — Planetary twin (this goal)
+
+- [x] Merge FastAPI territory index with the Next.js twin; union `.gitignore`; whitepaper README
+- [x] VisionOS Control Dock + pinned inspector + ⌘K districts/snapshots (no feature deletions)
+- [x] Cinematic harbour fly-in, look-at, and orbital camera
+- [x] Neon Drizzle `?sim=uuid` + DuckDB-WASM Arrow IPC + ENU spatial hash (sub-10 ms)
+- [x] CityJSON 2.0 / H3 GeoJSON / Kepler-style packed GPU instances
+- [x] Astronomical solar rays, canyon shadows, Tong Lau inertia, Venturi GPU streamlines, convective plumes
+- [x] Monte Carlo 95% CI violins (1,000 draws) retained on the policy drawer
+- [x] `SYSTEM_INTELLIGENCE.md` formulas and benches
+- [ ] Figma / Notion / Canva / Drive MCP (requires Cursor desktop authentication)
+- [ ] Authentication and audit log for HA/DH users (login)
+- [ ] Traditional Chinese screen-reader pass and WCAG contrast on glass panels
+- [ ] Automated visual regression of the Kowloon view state
+- [ ] GPU particle layer (WebGPU compute) if ScatterplotLayer saturates at 60 FPS

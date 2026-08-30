@@ -1,10 +1,10 @@
 "use client";
 
-import { Box, Crosshair, Hexagon, Pause, Play, Share2, ThermometerSun, Wind } from "lucide-react";
+import { Box, Crosshair, Globe2, Hexagon, Pause, Play, Share2, ThermometerSun, Wind } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { HUD_PRESETS, type HudLayers, type HudPresetId } from "@/lib/hud";
 import { STRESS_SCENARIOS, type StressScenarioId } from "@/lib/scenarios";
-import { TWIN_FLYIN_EVENT } from "@/lib/twin-camera";
+import { TWIN_FLYIN_EVENT, TWIN_ORBIT_EVENT } from "@/lib/twin-camera";
 import { formatHourLabel } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +94,15 @@ export function ControlDock() {
             data-testid="camera-reset"
           >
             <Crosshair className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(TWIN_ORBIT_EVENT))}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-slate-300 hover:text-cyan-100"
+            aria-label="Cinematic orbital camera"
+            data-testid="camera-orbit"
+          >
+            <Globe2 className="h-3.5 w-3.5" />
           </button>
 
           <div className="mx-1 flex items-center gap-0.5" data-testid="dock-layers">

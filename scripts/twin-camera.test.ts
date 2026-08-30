@@ -8,6 +8,7 @@ import {
   KOWLOON_TWIN_VIEW,
   cameraPosition,
   lerpView,
+  orbitView,
   pickNearestId,
   projectEnu,
   wgs84ToEnu,
@@ -42,6 +43,16 @@ describe("software twin camera", () => {
     assert.ok(mid.distance < HARBOUR_TWIN_VIEW.distance);
     assert.ok(mid.distance > KOWLOON_TWIN_VIEW.distance);
     assert.ok(zoomToDistanceM(KOWLOON_VIEW.zoom) < zoomToDistanceM(HARBOUR_APPROACH_VIEW.zoom));
+  });
+
+  it("orbits bearing through a full cinematic turn without collapsing distance", () => {
+    const a = orbitView(KOWLOON_TWIN_VIEW, 0);
+    const b = orbitView(KOWLOON_TWIN_VIEW, 8000);
+    const c = orbitView(KOWLOON_TWIN_VIEW, 16000);
+    assert.ok(Math.abs(b.bearingDeg - a.bearingDeg) > 90);
+    assert.ok(Math.abs(c.bearingDeg - a.bearingDeg - 360) < 1e-6);
+    assert.ok(b.distance > 200);
+    assert.ok(b.pitchDeg >= 38 && b.pitchDeg <= 72);
   });
 
   it("projects a western building left of an eastern one when looking north", () => {

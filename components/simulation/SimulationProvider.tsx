@@ -64,6 +64,7 @@ import type { MonteCarloResult } from "@/lib/monte-carlo";
 import { runMonteCarloAsync } from "@/lib/monte-carlo-client";
 import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
 import { buildingCentroid } from "@/lib/spatial-data";
+import { measureSpatialIndex, spatialGridFromBuildings, type SpatialIndexStats } from "@/lib/spatial-grid";
 import type { SimulationRunDto } from "@/lib/db/types";
 import { clusterMetricsFromSnapshot } from "@/lib/db/metrics";
 import {
@@ -97,6 +98,7 @@ interface SimulationContextValue {
   envelope: HkoDiurnalEnvelope | null;
   envelopeError: string | null;
   spatial: SpatialSnapshotMeta;
+  spatialIndex: SpatialIndexStats;
   haNowcast: HaNowcast | null;
   haError: string | null;
   coolRoofPlan: CoolRoofPlan | null;
@@ -402,6 +404,11 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     () => evaluateSystemAtHour(hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing),
     [hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing],
   );
+  const spatialGrid = useMemo(() => spatialGridFromBuildings(buildings), [buildings]);
+  const spatialIndex = useMemo(() => {
+    spatialGrid.applyHourlyCvi(snapshot.buildings);
+    return measureSpatialIndex(spatialGrid);
+  }, [spatialGrid, snapshot]);
 
   const hourlyFlat = useMemo(() => Array.from(cache.values()), [cache]);
   const queryHour = Math.round(wrapHour(hour)) % 24;
@@ -693,6 +700,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       envelope: forcedEnvelope,
       envelopeError,
       spatial,
+      spatialIndex,
       haNowcast,
       haError,
       coolRoofPlan,
@@ -748,6 +756,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       forcedEnvelope,
       envelopeError,
       spatial,
+      spatialIndex,
       haNowcast,
       haError,
       coolRoofPlan,

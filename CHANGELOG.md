@@ -2,6 +2,23 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.9.0] — 2026-08-30
+
+### Added
+
+- Dual-scale merge with `origin/main`: FastAPI 18-district risk index (`aeris_hk/`, port 8000) lives beside the Kowloon West Next.js twin (port 3000). `.gitignore` keeps every Node and Python ignore rule. `.cursor/environment.json` installs and runs both stacks.
+- Whitepaper README and `SYSTEM_INTELLIGENCE.md` (architecture, formulas, CRS/SSR, benches).
+- ENU typed-array spatial grid (`lib/spatial-grid.ts`) — bbox / kNN over 24k–50k urban vectors in sub-10 ms; HUD ticker reports live timings.
+- CityJSON 2.0 HK80 solids (`lib/cityjson.ts`, `GET /api/spatial/cityjson`).
+- Cinematic orbital camera (`TWIN_ORBIT_EVENT`, Control Dock globe, key `O`).
+- Astronomical solar disc, ray, and ground-plane building shadows on TwinCanvas; `castGroundShadow` in `lib/solar-engine.ts`.
+- Venturi alley streamlines: particle trails (amber when squeezed) plus Deck.gl `VenturiStreamExtension` GPU pulse.
+- ⌘K district jumps (Sham Shui Po / Yau Tsim Mong).
+
+### Changed
+
+- Wind particles carry `venturi`, `stalled`, and a 6-point trail. GPU ScatterplotLayer colour-codes acceleration vs stall.
+
 ## [0.8.0] — 2026-08-30
 
 ### Added

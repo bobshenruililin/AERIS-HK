@@ -1,13 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { neon } from "@neondatabase/serverless";
-import { getBuildings } from "../lib/spatial-data";
-import { precomputeHourlyCache } from "../lib/epidemiology-engine";
+import { getBuildings, buildingCentroid } from "../lib/spatial-data";
+import { evaluateSystemAtHour, precomputeHourlyCache } from "../lib/epidemiology-engine";
 import { DEFAULT_POLICY } from "../lib/types";
 import { projectEnu, wgs84ToEnu, KOWLOON_TWIN_VIEW } from "../lib/twin-camera";
-import { buildingCentroid } from "../lib/spatial-data";
 import { ensureAerisPersistenceSchema } from "../lib/db/client";
 import { seedKowloonWestBuildings } from "../lib/db/queries";
+import { spatialGridFromBuildings } from "../lib/spatial-grid";
 
 function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b);
@@ -106,14 +106,41 @@ function frameBudget1080p(): { meanMs: number; p95Ms: number; fpsEstimate: numbe
   return { meanMs, p95Ms: percentile(samples, 95), fpsEstimate: 1000 / Math.max(0.01, meanMs) };
 }
 
+function spatialGrid50k(): { vectors: number; cells: number; bboxP50Ms: number; knnP50Ms: number } {
+  const buildings = getBuildings();
+  const cache = precomputeHourlyCache(DEFAULT_POLICY, buildings, null);
+  const snap = evaluateSystemAtHour(15, DEFAULT_POLICY, buildings, cache, null, null);
+  const cvi = new Map(snap.buildings.map((row) => [row.buildingId, row.cvi]));
+  const grid = spatialGridFromBuildings(buildings, cvi, 50_000);
+  grid.queryBBox(-700, -1100, 900, 700);
+  const bbox: number[] = [];
+  const knn: number[] = [];
+  for (let i = 0; i < 24; i += 1) {
+    const t0 = performance.now();
+    grid.queryBBox(-700, -1100, 900, 700, 70);
+    bbox.push(performance.now() - t0);
+    const t1 = performance.now();
+    grid.queryKnn(0, 0, 16);
+    knn.push(performance.now() - t1);
+  }
+  return {
+    vectors: grid.count,
+    cells: grid.cellCount,
+    bboxP50Ms: percentile(bbox, 50),
+    knnP50Ms: percentile(knn, 50),
+  };
+}
+
 async function main() {
   const neon = await neonLatencies();
   const duck = duckDbShapedSpatialScan();
   const frames = frameBudget1080p();
+  const spatial = spatialGrid50k();
   const report = {
     at: new Date().toISOString(),
     neon,
     duckdbShaped: duck,
+    spatialGrid: spatial,
     deckFrameBudget: frames,
     targetFps: 60,
     frameBudgetMs: 16.67,

@@ -6,13 +6,15 @@ import { Building2, Command, Database, Layers, MapPin, ThermometerSun, Wind, Zap
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { POLICY_PRESETS, STRESS_SCENARIOS, type StressScenarioId } from "@/lib/scenarios";
 import { isTypingTarget } from "@/lib/hud";
+import { TWIN_DISTRICTS } from "@/lib/districts";
+import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
 
 type PaletteItem = {
   id: string;
   group: string;
   label: string;
   hint?: string;
-  icon: "building" | "policy" | "layer" | "scenario" | "street" | "snapshot";
+  icon: "building" | "policy" | "layer" | "scenario" | "street" | "snapshot" | "district";
   run: () => void;
 };
 
@@ -63,6 +65,16 @@ export function CommandPalette() {
       "pei ho st tong lau": ["Pei Ho St Tong Lau Block A", "北河街唐樓 A座"],
       "temple street night market": ["Temple St Night Market", "廟街夜市"],
     };
+    const districtItems: PaletteItem[] = TWIN_DISTRICTS.map((d) => ({
+      id: `district-${d.id}`,
+      group: "Districts",
+      label: `${d.nameEn} · ${d.nameZh}`,
+      hint: "cinematic look-at",
+      icon: "district" as const,
+      run: () => {
+        window.dispatchEvent(new CustomEvent(TWIN_LOOKAT_EVENT, { detail: { lon: d.lon, lat: d.lat } }));
+      },
+    }));
     const STREET_QUERIES = [
       { q: ["pei ho", "北河"], street: "Pei Ho Street" },
       { q: ["fuk wa", "福華"], street: "Fuk Wa Street" },
@@ -149,7 +161,15 @@ export function CommandPalette() {
       icon: "scenario",
       run: () => applyScenario(s.id as StressScenarioId),
     }));
-    const all = [...streetItems, ...buildingItems, ...policyItems, ...layerItems, ...scenarioItems, ...snapshotItems];
+    const all = [
+      ...districtItems,
+      ...streetItems,
+      ...buildingItems,
+      ...policyItems,
+      ...layerItems,
+      ...scenarioItems,
+      ...snapshotItems,
+    ];
     const q = query.trim().toLowerCase();
     if (!q) return all.slice(0, 18);
     return all
@@ -207,10 +227,13 @@ export function CommandPalette() {
                       item.run();
                       setCommandPaletteOpen(false);
                     }}
+                    data-testid={`palette-item-${item.id}`}
                     className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-slate-200 hover:bg-cyan-400/10"
                   >
                     {item.icon === "building" ? (
                       <Building2 className="h-3.5 w-3.5 text-cyan-300" />
+                    ) : item.icon === "district" ? (
+                      <MapPin className="h-3.5 w-3.5 text-amber-200" />
                     ) : item.icon === "policy" ? (
                       <ThermometerSun className="h-3.5 w-3.5 text-amber-300" />
                     ) : item.icon === "street" ? (
@@ -262,6 +285,9 @@ export function HudHotkeys() {
       } else if (event.key.toLowerCase() === "f") {
         event.preventDefault();
         window.dispatchEvent(new Event("aeris-twin-flyin"));
+      } else if (event.key.toLowerCase() === "o") {
+        event.preventDefault();
+        window.dispatchEvent(new Event("aeris-twin-orbit"));
       } else if (event.key.toLowerCase() === "k" && !event.metaKey) {
         // palette is Cmd+K; ignore bare k
       }
