@@ -66,7 +66,7 @@ export function MapViewport() {
       ) : null}
       {askedGpu && gpu === "failover" ? (
         <div
-          className="pointer-events-none absolute bottom-28 left-1/2 z-20 -translate-x-1/2 rounded-full border border-amber-300/30 bg-slate-950/80 px-3 py-1 font-mono text-[10px] text-amber-100"
+          className="pointer-events-none absolute left-1/2 top-14 z-40 -translate-x-1/2 rounded-full border border-amber-300/30 bg-slate-950/90 px-3 py-1 font-mono text-[10px] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,0.25)]"
           data-testid="gpu-failover"
         >
           WebGL / MapLibre unavailable · software ENU twin
