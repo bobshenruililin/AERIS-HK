@@ -1,0 +1,48 @@
+# AERIS-HK · Cursor Operating Rules
+
+You are contributing to AERIS-HK (Atmospheric & Epidemiological Risk Inference System — Hong Kong | 氣候與流行病空間推演系統). Treat every change as aerospace-grade spatial software that will be read by Hospital Authority planners and biophysical epidemiologists.
+
+## Recursive `/goal` task decomposition
+
+When given a `/goal` (or any multi-step mission):
+
+1. Decompose into leaf tasks with explicit file paths, acceptance criteria, and CRS/SSR notes.
+2. Execute one leaf at a time. After each leaf, append a dated entry to `CHANGELOG.md` and tick the matching `ROADMAP.md` item.
+3. If a leaf uncovers new work, add it to `ROADMAP.md` rather than silently expanding scope.
+4. Never leave `// TODO`, `// FIXME`, `pass`, `throw new Error("not implemented")`, or placeholder arrays. Complete the function or do not ship the file.
+5. Re-run `npm run build` before declaring a goal complete. WebGL/DuckDB must not leak onto the server.
+
+## Spatial CRS safety (EPSG:2326 ↔ EPSG:4326)
+
+- **Store and compute** Hong Kong Grid as HK80 metres (EPSG:2326) on `building.properties.hk80`.
+- **Render** only WGS84 lon/lat (EPSG:4326) in Deck.gl / MapLibre. Never pass eastings to `getPosition`.
+- Convert exclusively through `lib/crs.ts` (International 1924 TM + Helmert TOWGS84). Do not invent linear offsets.
+- Call `assertWgs84` for any new Kowloon coordinate. Reject geometry outside the Hong Kong envelope.
+- DuckDB tables may store both CRS representations; map layers consume 4326 only.
+
+## WebGL / WASM SSR hydration defense
+
+- Every Deck.gl, MapLibre, Mapbox, or DuckDB-WASM module is `"use client"`.
+- Map entry is `components/map/MapViewport.tsx` via `next/dynamic(..., { ssr: false })`.
+- Do not import `AERISMap`, `maplibre-gl`, `@deck.gl/*`, or `@duckdb/duckdb-wasm` from Server Components or `lib/` files that layout/page might pull at SSR time except through client boundaries.
+- Guard DuckDB with `typeof window` / `Worker` checks (`lib/duckdb-engine.ts`).
+- If a new visualization library touches `window` or WebGL, wrap it the same way before importing.
+
+## Epidemiology and queuing integrity
+
+- CVI(t) = 0.35·MicroWBGT(t)/35 + 0.28·SubdividedDensity + 0.22·ElderlyRatio + 0.15·VentilationBlockage, then ×100.
+- Gagge 2-node remains `S = M - W - E - R - C` in `lib/epidemiology-engine.ts`. Do not collapse it to a single temperature proxy without those five terms.
+- High subdivided density + high AC rejector load must retain a ~6 h indoor phase lag with indoor T > 32°C between 21:00 and 03:00.
+- HA nodes are CMC, KWH, and QEH (QEH is modelled as regional overflow, not a KWC hospital). M/M/c utilisation must saturate safely (ρ < 1 handling).
+
+## Product language
+
+- Bilingual UI: English + 繁中 for building names, hospitals, and HKO-style warnings.
+- Tone: clinical, precise, non-sensational. This is a heat-health surveillance twin, not a disaster game.
+- `canvas-confetti` is reserved for material policy impact (admissions averted), not decoration on load.
+
+## Documentation loop
+
+- Update `ROADMAP.md` status whenever a phase or `/goal` prompt is completed or added.
+- Update `CHANGELOG.md` with user-facing changes (Keep a Changelog format).
+- Keep README accurate for `npm run dev` / `npm run build`.
