@@ -83,9 +83,9 @@ export class SpatialGrid {
       else this.idIndex.set(this.ids[i], [i]);
     }
     this.buckets = new Map();
-    for (const [key, idxs] of lists) {
+    lists.forEach((idxs, key) => {
       this.buckets.set(key, Uint32Array.from(idxs));
-    }
+    });
   }
 
   get cellCount(): number {

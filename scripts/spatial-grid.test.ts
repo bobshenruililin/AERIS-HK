@@ -62,7 +62,7 @@ describe("ENU spatial grid", () => {
     assert.ok(ytm.length > 0);
     const sspIds = new Set(ssp.map((h) => h.id));
     const ytmIds = new Set(ytm.map((h) => h.id));
-    const overlap = [...sspIds].filter((id) => ytmIds.has(id));
+    const overlap = Array.from(sspIds).filter((id) => ytmIds.has(id));
     assert.ok(overlap.length < Math.min(sspIds.size, ytmIds.size));
     assert.equal(TWIN_DISTRICTS.length, 2);
   });
