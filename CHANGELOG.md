@@ -2,6 +2,22 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.12.0] — 2026-08-30
+
+### Added
+
+- Runtime feature probes (`lib/runtime-guards.ts`) for WebGL2, WebAssembly, and Workers. Deck.gl / MapLibre demote to the software ENU twin; DuckDB returns `null` without throwing; Monte Carlo falls back to `sync-js`.
+- React error boundaries: HUD `ErrorBoundary`, GPU overlay boundary, `app/error.tsx`, `app/global-error.tsx`. GPU failover chip `data-testid="gpu-failover"`.
+- `ClientOnly` + `MissionShell` hydration gate so SSR HTML matches the first client paint. `suppressHydrationWarning` on `<html>`/`<body>`.
+- Unified HUD keyboard grammar (`lib/hotkeys.ts`): `1–4` presets, `Space` timeline, `Cmd/Ctrl+K` search, `Esc` dismiss cascade (palette → modals → pinned inspector).
+- Formula micro-tooltips (`lib/formulas.ts`, `FormulaTip`) on every biophysical spark/chart quoting ISO 7243 WBGT (operational UTCI analogue), ISO 7730 Fanger PMV, and Bishai/DLNM-style RR 0.22/°C.
+- `npm run test:hardening`. Delivery ledger in `SYSTEM_INTELLIGENCE.md` §10.
+
+### Changed
+
+- Inspector pin position is measured in `useLayoutEffect` (no `window` during render). Briefing timestamps are set only after the modal opens.
+- Design tokens drive `GlassPanel` fill. Duplicate `spatial-data` imports merged.
+
 ## [0.11.0] — 2026-08-30
 
 ### Added

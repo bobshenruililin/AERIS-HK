@@ -7,6 +7,7 @@ import { solarElevationDeg } from "@/lib/solar";
 import { solarPositionHk } from "@/lib/solar-engine";
 import type { PlaybackSpeed } from "@/lib/types";
 import { GlassPanel } from "./GlassPanel";
+import { FormulaTip } from "./FormulaTooltip";
 
 const SPEEDS: PlaybackSpeed[] = [1, 2, 5];
 
@@ -32,6 +33,7 @@ export function TimeScrubber() {
               onClick={() => setPlaying(!playing)}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40 hover:bg-cyan-400/30"
               aria-label={playing ? "Pause diurnal playback" : "Play diurnal playback"}
+              title="Space"
             >
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </button>
@@ -57,7 +59,7 @@ export function TimeScrubber() {
             ))}
           </div>
         </div>
-        <div className="mb-1 flex h-10 items-end gap-px">
+        <div className="group/tip relative mb-1 flex h-10 items-end gap-px">
           {solarTicks.map((tick) => (
             <div key={tick.h} className="relative flex flex-1 items-end">
               <div
@@ -70,10 +72,18 @@ export function TimeScrubber() {
                   height: `${Math.max(6, (tick.scen / maxArr) * 100)}%`,
                   opacity: tick.elev > 0 ? 0.95 : 0.45,
                 }}
-                title={`${String(tick.h).padStart(2, "0")}:00 solar ${tick.elev.toFixed(0)}° · λ ${tick.scen.toFixed(1)}`}
               />
             </div>
           ))}
+          <FormulaTip id="dlnm-rr" className="absolute right-0 top-0">
+            <span className="sr-only">Diurnal Cat 1–3 arrival bars</span>
+          </FormulaTip>
+          <FormulaTip id="pmv" className="absolute right-8 top-0">
+            <span className="sr-only">ISO 7730 Fanger PMV</span>
+          </FormulaTip>
+          <FormulaTip id="utci" className="absolute right-16 top-0">
+            <span className="sr-only">ISO 7243 WBGT / operational UTCI</span>
+          </FormulaTip>
         </div>
         <input
           type="range"

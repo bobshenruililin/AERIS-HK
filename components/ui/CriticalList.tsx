@@ -21,6 +21,7 @@ export function CriticalList() {
           label="Knapsack"
           value={`${policy.coolRoofTargetIds.length} roofs`}
           spark={ranked.map((r) => r.admissionsAverted)}
+          formulaId="knapsack"
           onClick={() => toggleDrawer("critical")}
         />
       }

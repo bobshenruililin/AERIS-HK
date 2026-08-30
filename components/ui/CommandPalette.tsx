@@ -7,7 +7,8 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { POLICY_PRESETS, STRESS_SCENARIOS, type StressScenarioId } from "@/lib/scenarios";
 import { isTypingTarget } from "@/lib/hud";
 import { TWIN_DISTRICTS } from "@/lib/districts";
-import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
+import { TWIN_FLYIN_EVENT, TWIN_LOOKAT_EVENT, TWIN_ORBIT_EVENT } from "@/lib/twin-camera";
+import { AERIS_ESCAPE_EVENT, interpretHudKey } from "@/lib/hotkeys";
 
 type PaletteItem = {
   id: string;
@@ -43,22 +44,6 @@ export function CommandPalette() {
     }
     return undefined;
   }, [commandPaletteOpen]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandPaletteOpen(!commandPaletteOpen);
-        return;
-      }
-      if (event.key === "Escape" && commandPaletteOpen) {
-        event.preventDefault();
-        setCommandPaletteOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [commandPaletteOpen, setCommandPaletteOpen]);
 
   const items = useMemo<PaletteItem[]>(() => {
     const aliases: Record<string, string[]> = {
@@ -269,32 +254,69 @@ export function HudHotkeys() {
     setPlaying,
     commandPaletteOpen,
     setCommandPaletteOpen,
+    setSelectedId,
+    setInspectorAnchor,
+    setFocusedHospital,
   } = useSimulation();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target) || commandPaletteOpen) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === "1") setHudPreset(1);
-      else if (event.key === "2") setHudPreset(2);
-      else if (event.key === "3") setHudPreset(3);
-      else if (event.key === "4") setHudPreset(4);
-      else if (event.key === " " || event.code === "Space") {
+      const action = interpretHudKey(event, {
+        typing: isTypingTarget(event.target),
+        paletteOpen: commandPaletteOpen,
+      });
+      if (!action) return;
+      if (action.type === "search") {
+        event.preventDefault();
+        setCommandPaletteOpen(!commandPaletteOpen);
+        return;
+      }
+      if (action.type === "dismiss") {
+        event.preventDefault();
+        if (commandPaletteOpen) {
+          setCommandPaletteOpen(false);
+          return;
+        }
+        const ev = new CustomEvent(AERIS_ESCAPE_EVENT, { cancelable: true });
+        window.dispatchEvent(ev);
+        if (ev.defaultPrevented) return;
+        setSelectedId(null);
+        setInspectorAnchor(null);
+        setFocusedHospital(null);
+        return;
+      }
+      if (action.type === "preset") {
+        event.preventDefault();
+        setHudPreset(action.id);
+        return;
+      }
+      if (action.type === "timeline-toggle") {
         event.preventDefault();
         setPlaying(!playing);
-      } else if (event.key.toLowerCase() === "f") {
+        return;
+      }
+      if (action.type === "flyin") {
         event.preventDefault();
-        window.dispatchEvent(new Event("aeris-twin-flyin"));
-      } else if (event.key.toLowerCase() === "o") {
+        window.dispatchEvent(new Event(TWIN_FLYIN_EVENT));
+        return;
+      }
+      if (action.type === "orbit") {
         event.preventDefault();
-        window.dispatchEvent(new Event("aeris-twin-orbit"));
-      } else if (event.key.toLowerCase() === "k" && !event.metaKey) {
-        // palette is Cmd+K; ignore bare k
+        window.dispatchEvent(new Event(TWIN_ORBIT_EVENT));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setHudPreset, playing, setPlaying, commandPaletteOpen, setCommandPaletteOpen]);
+  }, [
+    setHudPreset,
+    playing,
+    setPlaying,
+    commandPaletteOpen,
+    setCommandPaletteOpen,
+    setSelectedId,
+    setInspectorAnchor,
+    setFocusedHospital,
+  ]);
 
   return null;
 }

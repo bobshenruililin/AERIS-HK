@@ -4,6 +4,7 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
 import { HudDrawer, HudPill } from "./HudDrawer";
 import { DECADE_EPISODES, decadeCumulativeAverted, episodeRelativeRisk } from "@/lib/decade";
+import { FormulaTip } from "./FormulaTooltip";
 
 export function DecadeObservatory() {
   const { episodeId, setEpisodeId, impact, coolRoofPlan, neonArchive, toggleDrawer } = useSimulation();
@@ -21,6 +22,7 @@ export function DecadeObservatory() {
           label="Decade"
           value={`Σ ${cumulative.toFixed(0)}`}
           spark={DECADE_EPISODES.map((e) => episodeRelativeRisk(e))}
+          formulaId="dlnm-rr"
           onClick={() => toggleDrawer("decade")}
         />
       }
@@ -28,7 +30,9 @@ export function DecadeObservatory() {
       <GlassPanel className="w-full max-w-5xl">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-amber-300">Decade observatory</div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-amber-300">
+              <FormulaTip id="dlnm-rr">Decade observatory</FormulaTip>
+            </div>
             <div className="text-[10px] text-slate-500">十年酷熱反事實 · 2016–2026 · if these roofs had been locked each summer</div>
           </div>
           <div className="font-mono text-[11px] text-emerald-300" data-testid="decade-cumulative">

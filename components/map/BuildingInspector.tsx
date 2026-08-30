@@ -1,9 +1,12 @@
 "use client";
 
+import { useLayoutEffect, useState } from "react";
 import { useSimulation, useSelectedBuildingState } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { FormulaTip } from "@/components/ui/FormulaTooltip";
 import { INDOOR_HAZARD_C } from "@/lib/constants";
 import type { InspectorTab } from "@/lib/hud";
+import type { FormulaId } from "@/lib/formulas";
 import { cn } from "@/lib/utils";
 
 export function BuildingInspector() {
@@ -48,12 +51,18 @@ export function BuildingInspector() {
         1;
 
   const pinned = Boolean(selectedId && inspectorAnchor);
-  const style = pinned
-    ? {
-        left: Math.min(window.innerWidth - 380, Math.max(12, inspectorAnchor!.x - 40)),
-        top: Math.min(window.innerHeight - 320, Math.max(72, inspectorAnchor!.y - 20)),
-      }
-    : undefined;
+  const [pinStyle, setPinStyle] = useState<{ left: number; top: number } | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    if (!selectedId || !inspectorAnchor) {
+      setPinStyle(undefined);
+      return;
+    }
+    setPinStyle({
+      left: Math.min(window.innerWidth - 380, Math.max(12, inspectorAnchor.x - 40)),
+      top: Math.min(window.innerHeight - 320, Math.max(72, inspectorAnchor.y - 20)),
+    });
+  }, [selectedId, inspectorAnchor]);
 
   const tabs: Array<{ id: InspectorTab; label: string }> = [
     { id: "biophysics", label: "Thermal Infiltration" },
@@ -68,7 +77,7 @@ export function BuildingInspector() {
           ? "pointer-events-none absolute z-30 w-[22rem] max-w-[calc(100vw-1.5rem)] p-0"
           : "pointer-events-none absolute bottom-36 left-1/2 z-20 w-full max-w-lg -translate-x-1/2 p-3 md:p-4"
       }
-      style={style}
+      style={pinned ? pinStyle : undefined}
       data-testid="building-inspector"
     >
       <GlassPanel>
@@ -107,8 +116,10 @@ export function BuildingInspector() {
         {inspectorTab === "biophysics" || !expanded ? (
           <div data-testid="inspector-biophysics">
             <div className="mt-2 font-mono text-[10px] text-slate-400">
-              S = M − W − E − R − C · {g.heatStorage.toFixed(1)} = {g.metabolicRate.toFixed(1)} − {g.externalWork.toFixed(1)} −{" "}
-              {g.evaporativeLoss.toFixed(1)} − {g.radiativeLoss.toFixed(1)} − {g.convectiveLoss.toFixed(1)} W/m²
+              <FormulaTip id="gagge">
+                S = M − W − E − R − C · {g.heatStorage.toFixed(1)} = {g.metabolicRate.toFixed(1)} − {g.externalWork.toFixed(1)} −{" "}
+                {g.evaporativeLoss.toFixed(1)} − {g.radiativeLoss.toFixed(1)} − {g.convectiveLoss.toFixed(1)} W/m²
+              </FormulaTip>
             </div>
             <div className="mt-1.5 flex h-8 items-end gap-1">
               {fluxes.map((f) => (
@@ -122,22 +133,22 @@ export function BuildingInspector() {
               ))}
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-              <Stat label="Micro-WBGT" value={`${state.microWbgt.toFixed(1)}°C`} warn={state.microWbgt >= 30} />
+              <Stat label="Micro-WBGT" value={`${state.microWbgt.toFixed(1)}°C`} warn={state.microWbgt >= 30} formulaId="utci" />
               <Stat label="Indoor inertia" value={`${state.indoorTa.toFixed(1)}°C`} warn={indoorHot} />
-              <Stat label="CVI" value={state.cvi.toFixed(1)} warn={state.cvi >= 70} />
+              <Stat label="CVI" value={state.cvi.toFixed(1)} warn={state.cvi >= 70} formulaId="cvi" />
               <Stat label="Sky-view Φ" value={state.skyViewFactor.toFixed(2)} />
               <Stat label="Canyon H/W" value={state.canyonAspect.toFixed(2)} />
               <Stat label="Roof SW" value={`${state.roofAbsorbedWm2.toFixed(0)} W/m²`} />
               <Stat label="Solar el." value={`${state.solarElevationDeg.toFixed(1)}°`} />
               <Stat label="Azimuth" value={`${state.solarAzimuthDeg.toFixed(0)}°`} />
-              <Stat label="PMV" value={state.pmv.toFixed(2)} warn={state.pmv >= 1.5} />
-              <Stat label="PPD" value={`${state.ppd.toFixed(0)}%`} warn={state.ppd >= 40} />
+              <Stat label="PMV" value={state.pmv.toFixed(2)} warn={state.pmv >= 1.5} formulaId="pmv" />
+              <Stat label="PPD" value={`${state.ppd.toFixed(0)}%`} warn={state.ppd >= 40} formulaId="pmv" />
               <Stat
                 label="Battery ΔT"
                 value={`${state.thermalBatteryC >= 0 ? "+" : ""}${state.thermalBatteryC.toFixed(2)}°C`}
                 warn={state.thermalBatteryC >= 1.5}
               />
-              <Stat label="WBGT Δ" value={`${state.wbgtDifferentialC.toFixed(1)}°C`} />
+              <Stat label="WBGT Δ" value={`${state.wbgtDifferentialC.toFixed(1)}°C`} formulaId="utci" />
               <Stat
                 label="Canyon beam"
                 value={`${(state.canyonDirectBeamFrac * 100).toFixed(0)}%`}
@@ -162,8 +173,8 @@ export function BuildingInspector() {
 
         {inspectorTab === "surge" ? (
           <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]" data-testid="inspector-surge">
-            <Stat label="CVI" value={state.cvi.toFixed(1)} warn={state.cvi >= 70} />
-            <Stat label="Strain" value={state.cardiovascularStrain.toFixed(1)} />
+            <Stat label="CVI" value={state.cvi.toFixed(1)} warn={state.cvi >= 70} formulaId="cvi" />
+            <Stat label="Strain" value={state.cardiovascularStrain.toFixed(1)} formulaId="dlnm-rr" />
             <Stat label="Indoor Tw" value={`${state.indoorWetBulbC.toFixed(1)}°C`} warn={state.indoorWetBulbC >= 36} />
             <Stat label="Target rank" value={rank ? `#${rank}` : "—"} />
             <Stat label="Cool roof" value={targeted ? "LOCKED" : "—"} warn={targeted} />
@@ -188,11 +199,22 @@ export function BuildingInspector() {
   );
 }
 
-function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
-  return (
+function Stat({
+  label,
+  value,
+  warn,
+  formulaId,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+  formulaId?: FormulaId;
+}) {
+  const body = (
     <div className={`rounded-lg px-2 py-1.5 ${warn ? "bg-amber-500/15 text-amber-100" : "bg-white/5 text-slate-200"}`}>
       <div className="text-[9px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className="font-mono text-xs">{value}</div>
     </div>
   );
+  return formulaId ? <FormulaTip id={formulaId}>{body}</FormulaTip> : body;
 }

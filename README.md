@@ -113,7 +113,7 @@ Interface density is solved with aerospace / VisionOS glass — **not** by remov
 - **Control Dock** (bottom pill): layers, playbar, Jul 2022 / Typhoon / Blackout, Share `?sim=`.
 - **Pinned ENU telemetry** on building pick; inspector tabs Thermal / Demographic / A&E Surge (Cat 1–3).
 - **Cinematic orbital camera** on TwinCanvas (Control Dock → Orbit).
-- Presets **1–4**, decade observatory, GPU overlay, Monte Carlo chart — all retained.
+- **Keyboard**: `1–4` dock presets, `Space` play/pause, `⌘K` / `Ctrl+K` palette, `Esc` dismisses palette then pinned inspector HUDs. Formula `ƒ` tips on every biophysical spark (UTCI/WBGT, Fanger PMV, DLNM-style RR).
 
 ---
 
@@ -151,7 +151,7 @@ npm run test:twin && npm run test:decade && npm run test:solar
 npm run test:mc && npm run test:scenarios && npm run test:bio
 npm run test:h3 && npm run test:db && npm run test:spatial
 npm run test:instance && npm run test:arrow && npm run test:cache
-npm run test:triage && npm run test:briefing
+npm run test:triage && npm run test:briefing && npm run test:hardening
 npm run build
 ```
 

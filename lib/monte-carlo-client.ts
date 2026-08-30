@@ -2,10 +2,11 @@
 
 import type { MonteCarloInput, MonteCarloResult } from "./monte-carlo";
 import { runMonteCarlo } from "./monte-carlo";
+import { canUseMonteCarloWorker } from "./runtime-guards";
 
 export function runMonteCarloAsync(payload: MonteCarloInput): Promise<MonteCarloResult> {
-  if (typeof window === "undefined" || typeof Worker === "undefined") {
-    return Promise.resolve(runMonteCarlo(payload));
+  if (!canUseMonteCarloWorker()) {
+    return Promise.resolve({ ...runMonteCarlo(payload), engine: "sync-js" });
   }
   return new Promise((resolve) => {
     let settled = false;

@@ -10,6 +10,7 @@ import { ExportReport } from "@/components/ui/ExportReport";
 import { ExecutiveBriefing } from "@/components/ui/ExecutiveBriefing";
 import { CausalStrip } from "@/components/ui/CausalStrip";
 import { BriefingButton } from "@/components/simulation/BriefingTour";
+import { FormulaTip } from "@/components/ui/FormulaTooltip";
 
 export function Header() {
   const {
@@ -82,8 +83,12 @@ export function Header() {
 
         {compact ? (
           <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[10px] text-slate-400">
-            <span>{impact.admissionsAverted.toFixed(1)} averted</span>
-            <span>{snapshot.regionalMeanWbgt.toFixed(1)}° WBGT</span>
+            <span>
+              <FormulaTip id="dlnm-rr">{impact.admissionsAverted.toFixed(1)} averted</FormulaTip>
+            </span>
+            <span>
+              <FormulaTip id="utci">{snapshot.regionalMeanWbgt.toFixed(1)}° WBGT</FormulaTip>
+            </span>
             <span>{(snapshot.clusterBedStress * 100).toFixed(1)}% beds</span>
             <span>solar {elev.toFixed(1)}° · breeze {(forcing.seaBreezeScale * 100).toFixed(0)}%</span>
             <button type="button" className="text-cyan-300" onClick={() => toggleDrawer("header")}>
@@ -100,6 +105,7 @@ export function Header() {
             value={impact.admissionsAverted.toFixed(1)}
             testId="mission-admissions-averted"
             tone="emerald"
+            formulaId="dlnm-rr"
           />
           <Hero
             label="Roofs locked"
@@ -116,11 +122,17 @@ export function Header() {
             sub={`m² of ${Math.round(policy.coolRoofBudgetM2)}`}
             tone="amber"
           />
-          <Hero label="Micro-WBGT" zh="微氣候濕球黑球" value={`${snapshot.regionalMeanWbgt.toFixed(1)}°`} tone="cyan" />
+          <Hero
+            label="Micro-WBGT"
+            zh="微氣候濕球黑球"
+            value={`${snapshot.regionalMeanWbgt.toFixed(1)}°`}
+            tone="cyan"
+            formulaId="utci"
+          />
           <Hero label="HA bed stress" zh="病床壓力" value={`${bedPct.toFixed(1)}%`} tone={bedPct >= 100 ? "red" : "cyan"} />
         </div>
 
-        <div className="relative mt-2 flex h-10 items-end gap-px rounded-lg bg-black/40 px-1 pt-1" title="Baseline (dim) vs scenario Cat 1–3 arrivals">
+        <div className="group/tip relative mt-2 flex h-10 items-end gap-px rounded-lg bg-black/40 px-1 pt-1">
           {Array.from({ length: 24 }, (_, h) => {
             const base = sparkBase[h] ?? 0;
             const scen = spark[h] ?? 0;
@@ -141,6 +153,9 @@ export function Header() {
             className="pointer-events-none absolute h-8 w-px bg-cyan-200"
             style={{ left: `calc(${playhead * 100}% + 4px)` }}
           />
+          <FormulaTip id="dlnm-rr" className="absolute right-1 top-0">
+            <span className="sr-only">24h Cat 1–3 arrivals sparkline</span>
+          </FormulaTip>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-slate-400">
@@ -201,6 +216,7 @@ function Hero({
   sub,
   testId,
   tone,
+  formulaId,
 }: {
   label: string;
   zh: string;
@@ -208,6 +224,7 @@ function Hero({
   sub?: string;
   testId?: string;
   tone: "emerald" | "amber" | "cyan" | "red";
+  formulaId?: "utci" | "pmv" | "dlnm-rr";
 }) {
   const color =
     tone === "emerald"
@@ -219,7 +236,9 @@ function Hero({
           : "text-cyan-100";
   return (
     <div className="rounded-xl bg-white/5 px-3 py-2">
-      <div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">{label}</div>
+      <div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">
+        {formulaId ? <FormulaTip id={formulaId}>{label}</FormulaTip> : label}
+      </div>
       <div className={`font-mono text-xl leading-tight ${color}`} data-testid={testId}>
         {value}
       </div>

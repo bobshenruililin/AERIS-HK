@@ -4,54 +4,72 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { TwinCanvas } from "./TwinCanvas";
 import { CinematicPlate } from "@/components/assets/CinematicPlate";
+import { ErrorBoundary } from "@/components/system/ErrorBoundary";
+import { AERIS_GPU_FAILED_EVENT, probeHealthyWebGL2 } from "@/lib/runtime-guards";
 
 const AERISMap = dynamic(() => import("./AERISMap"), {
   ssr: false,
   loading: () => null,
 });
 
-/**
- * Only promote Deck.gl when the caller asked (?gpu=1) *and* a real
- * non-software WebGL2 context can clear and read back a pixel.
- * Otherwise the Canvas2D ENU twin is the picture — MapLibre-without-extrusions
- * is a flat Carto sheet that hides the city.
- */
-function probeHealthyWebGL2(): boolean {
-  if (typeof document === "undefined") return false;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = 32;
-    canvas.height = 32;
-    const gl = canvas.getContext("webgl2", {
-      failIfMajorPerformanceCaveat: true,
-      antialias: false,
-      preserveDrawingBuffer: true,
-    });
-    if (!gl || gl.isContextLost() || gl.drawingBufferWidth < 32) return false;
-    gl.clearColor(0.05, 0.82, 0.31, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    const px = new Uint8Array(4);
-    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    return px[1] > 160 && px[0] < 80;
-  } catch {
-    return false;
-  }
-}
+type GpuState = "software" | "promoted" | "failover";
 
+/**
+ * Deck.gl + MapLibre (Mapbox-compatible style) mount only when the caller
+ * asked (?gpu=1) *and* a real non-software WebGL2 context can clear and read
+ * back a pixel. Mapbox GL JS is never instantiated; MapLibre is the basemap.
+ * TwinCanvas (Canvas2D ENU) is always the picture underneath.
+ */
 export function MapViewport() {
-  const [gpu, setGpu] = useState(false);
+  const [gpu, setGpu] = useState<GpuState>("software");
+  const [askedGpu, setAskedGpu] = useState(false);
+
   useEffect(() => {
     const asked = new URLSearchParams(window.location.search).get("gpu") === "1";
-    setGpu(asked && probeHealthyWebGL2());
+    setAskedGpu(asked);
+    if (!asked) {
+      setGpu("software");
+      return;
+    }
+    if (!probeHealthyWebGL2()) {
+      setGpu("failover");
+      return;
+    }
+    setGpu("promoted");
+  }, []);
+
+  useEffect(() => {
+    const demote = () => setGpu((s) => (s === "promoted" ? "failover" : s));
+    window.addEventListener(AERIS_GPU_FAILED_EVENT, demote);
+    window.addEventListener("webglcontextlost", demote);
+    return () => {
+      window.removeEventListener(AERIS_GPU_FAILED_EVENT, demote);
+      window.removeEventListener("webglcontextlost", demote);
+    };
   }, []);
 
   return (
     <div className="absolute inset-0 bg-[#05070c]" data-testid="map-viewport">
       <CinematicPlate />
-      <TwinCanvas />
-      {gpu ? (
-        <div className="absolute inset-0" data-testid="gpu-twin">
-          <AERISMap />
+      <ErrorBoundary fallback={null}>
+        <TwinCanvas />
+      </ErrorBoundary>
+      {gpu === "promoted" ? (
+        <ErrorBoundary
+          fallback={null}
+          onError={() => setGpu("failover")}
+        >
+          <div className="absolute inset-0" data-testid="gpu-twin">
+            <AERISMap />
+          </div>
+        </ErrorBoundary>
+      ) : null}
+      {askedGpu && gpu === "failover" ? (
+        <div
+          className="pointer-events-none absolute bottom-28 left-1/2 z-20 -translate-x-1/2 rounded-full border border-amber-300/30 bg-slate-950/80 px-3 py-1 font-mono text-[10px] text-amber-100"
+          data-testid="gpu-failover"
+        >
+          WebGL / MapLibre unavailable · software ENU twin
         </div>
       ) : null}
     </div>

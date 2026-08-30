@@ -12,30 +12,37 @@ import { HudOverlays } from "@/components/assets/HudOverlays";
 import { DecadeObservatory } from "@/components/ui/DecadeObservatory";
 import { ControlDock } from "@/components/ui/ControlDock";
 import { CommandPalette, HudHotkeys } from "@/components/ui/CommandPalette";
+import { ClientOnly } from "@/components/system/ClientOnly";
+import { ErrorBoundary } from "@/components/system/ErrorBoundary";
+import { MissionShell } from "@/components/system/MissionShell";
 
 export function MissionControl() {
   return (
-    <SimulationProvider>
-      <div
-        className="relative h-screen w-screen overflow-hidden bg-[#05070c] text-slate-100"
-        data-testid="hud-ready"
-      >
-        <MapViewport />
-        <HudOverlays />
-        <ControlDock />
-        <Header />
-        <HospitalBoard />
-        <PolicyDrawer />
-        <CriticalList />
-        <BuildingInspector />
-        <DecadeObservatory />
-        <TimeScrubber />
-        <CommandPalette />
-        <HudHotkeys />
-        <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 md:block">
-          Synthetic morphology · live HKO + HA aggregates · not an official product
-        </div>
-      </div>
-    </SimulationProvider>
+    <ClientOnly fallback={<MissionShell />}>
+      <ErrorBoundary fallback={<MissionShell label="AERIS-HK · HUD contained" />}>
+        <SimulationProvider>
+          <div
+            className="relative h-screen w-screen overflow-hidden bg-[#05070c] text-slate-100"
+            data-testid="hud-ready"
+          >
+            <MapViewport />
+            <HudOverlays />
+            <ControlDock />
+            <Header />
+            <HospitalBoard />
+            <PolicyDrawer />
+            <CriticalList />
+            <BuildingInspector />
+            <DecadeObservatory />
+            <TimeScrubber />
+            <CommandPalette />
+            <HudHotkeys />
+            <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 md:block">
+              Synthetic morphology · live HKO + HA aggregates · not an official product
+            </div>
+          </div>
+        </SimulationProvider>
+      </ErrorBoundary>
+    </ClientOnly>
   );
 }
