@@ -64,7 +64,12 @@ async function loadRanking(date) {
   list.querySelectorAll(".district-row").forEach((row) => {
     row.addEventListener("click", () => selectDistrict(row.dataset.id));
   });
-  if (state.selected) markActive(state.selected);
+  if (data.results.length) {
+    // Keep the current selection if still present, else default to the
+    // highest-risk district so the detail panel is always populated.
+    const keep = state.selected && data.results.some((r) => r.district_id === state.selected);
+    await selectDistrict(keep ? state.selected : data.results[0].district_id);
+  }
 }
 
 let _districtCache = null;
@@ -169,7 +174,6 @@ async function refresh() {
   state.date = document.getElementById("date").value;
   try {
     await Promise.all([loadSummary(state.date), loadRanking(state.date)]);
-    if (state.selected) await selectDistrict(state.selected);
   } catch (err) {
     console.error(err);
     document.getElementById("summary-cards").innerHTML = `<div class="card"><div class="card-label">Error</div><div class="card-value" style="font-size:16px">${err.message}</div></div>`;
@@ -179,9 +183,12 @@ async function refresh() {
 function init() {
   const today = new Date().toISOString().slice(0, 10);
   const input = document.getElementById("date");
-  input.value = today;
   input.max = today;
-  state.date = today;
+  // Allow a deep-linkable ?date=YYYY-MM-DD, defaulting to today.
+  const param = new URLSearchParams(location.search).get("date");
+  const initial = /^\d{4}-\d{2}-\d{2}$/.test(param || "") ? param : today;
+  input.value = initial;
+  state.date = initial;
   document.getElementById("refresh").addEventListener("click", refresh);
   input.addEventListener("change", refresh);
   refresh();
