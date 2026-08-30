@@ -196,6 +196,11 @@ export function CommandPalette() {
                 className="w-full bg-transparent text-sm text-cyan-50 outline-none placeholder:text-slate-500"
                 data-testid="command-palette-input"
                 onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setCommandPaletteOpen(false);
+                    return;
+                  }
                   if (event.key === "Enter" && items[0]) {
                     items[0].run();
                     setCommandPaletteOpen(false);
@@ -248,51 +253,45 @@ export function CommandPalette() {
 }
 
 export function HudHotkeys() {
-  const {
-    setHudPreset,
-    playing,
-    setPlaying,
-    commandPaletteOpen,
-    setCommandPaletteOpen,
-    setSelectedId,
-    setInspectorAnchor,
-    setFocusedHospital,
-  } = useSimulation();
+  const sim = useSimulation();
+  const simRef = useRef(sim);
+  simRef.current = sim;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      const s = simRef.current;
       const action = interpretHudKey(event, {
         typing: isTypingTarget(event.target),
-        paletteOpen: commandPaletteOpen,
+        paletteOpen: s.commandPaletteOpen,
       });
       if (!action) return;
       if (action.type === "search") {
         event.preventDefault();
-        setCommandPaletteOpen(!commandPaletteOpen);
+        s.setCommandPaletteOpen(!s.commandPaletteOpen);
         return;
       }
       if (action.type === "dismiss") {
         event.preventDefault();
-        if (commandPaletteOpen) {
-          setCommandPaletteOpen(false);
+        if (s.commandPaletteOpen) {
+          s.setCommandPaletteOpen(false);
           return;
         }
         const ev = new CustomEvent(AERIS_ESCAPE_EVENT, { cancelable: true });
         window.dispatchEvent(ev);
         if (ev.defaultPrevented) return;
-        setSelectedId(null);
-        setInspectorAnchor(null);
-        setFocusedHospital(null);
+        s.setSelectedId(null);
+        s.setInspectorAnchor(null);
+        s.setFocusedHospital(null);
         return;
       }
       if (action.type === "preset") {
         event.preventDefault();
-        setHudPreset(action.id);
+        s.setHudPreset(action.id);
         return;
       }
       if (action.type === "timeline-toggle") {
         event.preventDefault();
-        setPlaying(!playing);
+        s.setPlaying(!s.playing);
         return;
       }
       if (action.type === "flyin") {
@@ -307,16 +306,7 @@ export function HudHotkeys() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [
-    setHudPreset,
-    playing,
-    setPlaying,
-    commandPaletteOpen,
-    setCommandPaletteOpen,
-    setSelectedId,
-    setInspectorAnchor,
-    setFocusedHospital,
-  ]);
+  }, []);
 
   return null;
 }
