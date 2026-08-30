@@ -220,14 +220,6 @@ function dot(a: EnuPoint, b: EnuPoint): number {
   return a.east * b.east + a.north * b.north + a.up * b.up;
 }
 
-function cross(a: EnuPoint, b: EnuPoint): EnuPoint {
-  return {
-    east: a.north * b.up - a.up * b.north,
-    north: a.up * b.east - a.east * b.up,
-    up: a.east * b.north - a.north * b.east,
-  };
-}
-
 function normalize(a: EnuPoint): EnuPoint {
   const len = hypot3(a) || 1;
   return scale(a, 1 / len);
