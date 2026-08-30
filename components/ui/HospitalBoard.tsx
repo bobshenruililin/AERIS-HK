@@ -5,20 +5,20 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
 
 export function HospitalBoard() {
-  const { snapshot, haNowcast, haError } = useSimulation();
+  const { snapshot, haNowcast, haError, focusedHospital, setFocusedHospital } = useSimulation();
   const delay =
     haNowcast?.hospitals.reduce((m, h) => Math.max(m, h.occupancyDelayMinutes), 0) ??
     haNowcast?.waitBoardDelayMinutes ??
     null;
 
   return (
-    <div className="pointer-events-none absolute left-0 top-52 z-20 w-full max-w-sm p-3 md:p-4">
+    <div className="pointer-events-none absolute left-0 top-64 z-20 w-full max-w-sm p-3 md:p-4">
       <GlassPanel>
         <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">HA Kowloon West surge</div>
         <h2 className="mb-1 text-sm font-semibold text-white">CMC · KWH · QEH overflow</h2>
         <div className="mb-2 text-[10px] text-slate-400">
           {haNowcast
-            ? `Anonymised A&E nowcast · ${delay ?? 0} min CMS lag · hospital aggregates only`
+            ? `Anonymised A&E nowcast · ${delay ?? 0} min CMS lag · hospital aggregates only · click a node to light catchment arcs`
             : haError
               ? `HA nowcast error: ${haError}`
               : "HA CMS / A&E nowcast ingest…"}
@@ -30,13 +30,20 @@ export function HospitalBoard() {
             const occ = h.bedOccupancy * 100;
             const tone = occ >= 100 ? "bg-red-400" : occ >= 92 ? "bg-amber-400" : "bg-emerald-400";
             return (
-              <div key={h.code} className="rounded-xl bg-white/5 p-2.5">
-                <div className="flex items-baseline justify-between">
+              <div
+                key={h.code}
+                className={`rounded-xl p-2.5 ${focusedHospital === h.code ? "bg-amber-400/15 ring-1 ring-amber-300/40" : "bg-white/5"}`}
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-baseline justify-between text-left"
+                  onClick={() => setFocusedHospital(focusedHospital === h.code ? null : h.code)}
+                >
                   <div className="text-xs font-medium text-cyan-50">
                     {h.code} · {h.nameZh}
                   </div>
                   <div className="font-mono text-[11px] text-slate-300">RMR {h.relativeMortalityIndex.toFixed(2)}</div>
-                </div>
+                </button>
                 <div className="text-[10px] text-slate-400">{spec?.nameEn}</div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
                   <div className={`h-full ${tone}`} style={{ width: `${Math.min(100, occ)}%` }} />

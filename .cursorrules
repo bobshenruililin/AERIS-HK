@@ -36,7 +36,7 @@ When given a `/goal` (or any multi-step mission):
 - High subdivided density + high AC rejector load must retain a ~6 h indoor phase lag with indoor T > 32°C between 21:00 and 03:00.
 - HA nodes are CMC, KWH, and QEH (QEH is modelled as regional overflow, not a KWC hospital). M/M/c utilisation must saturate safely (ρ < 1 handling).
 - A&E nowcast is hospital-level aggregates only. Never persist HKID, names, episode numbers, bed numbers, or any patient-level identifier. Calibrate μ from Cat 1–3 mix and c from observed Cat 3 wait.
-- Cool-roof targeting takes a budget in m² and selects buildings with DuckDB window functions (`ROW_NUMBER`, running `SUM(roof_m2) OVER`) to maximise 24-hour admissions averted. Do not replace this with a uniform percent slider.
+- Cool-roof targeting takes a budget in m² and selects buildings with an exact 0/1 knapsack on 24-hour admissions averted. DuckDB window functions (`ROW_NUMBER`, running `SUM(roof_m2) OVER`) rank the same table. Do not replace this with a uniform percent slider.
 
 ## Product language
 

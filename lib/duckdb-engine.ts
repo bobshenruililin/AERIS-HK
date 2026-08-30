@@ -16,6 +16,7 @@ import { CVI_MODERATE_MAX } from "./constants";
 import { encodeCoolRoofCandidatesIpc, encodeHourlyIpc, hourlyRowsFromState, type HourIpcRow } from "./arrow-ipc";
 import { bindCoolRoofSql } from "./cool-roof-sql";
 import { emptyCoolRoofPlan, planFromSelected, selectCoolRoofsGreedyJs, totalRoofAreaM2 } from "./cool-roof-optimiser";
+import { attachWindowComparison, selectCoolRoofsKnapsack } from "./cool-roof-knapsack";
 
 type DuckDbModule = typeof import("@duckdb/duckdb-wasm");
 type AsyncDuckDB = import("@duckdb/duckdb-wasm").AsyncDuckDB;
@@ -337,16 +338,21 @@ async function optimiseCoolRoofTargetsExclusive(args: {
   totalRoofM2: number;
 }): Promise<CoolRoofPlan> {
   const started = performance.now();
-  const fallback = selectCoolRoofsGreedyJs(args.candidates, args.budgetM2, args.totalRoofM2);
+  const windowFallback = selectCoolRoofsGreedyJs(args.candidates, args.budgetM2, args.totalRoofM2);
+  const exact = selectCoolRoofsKnapsack(args.candidates, args.budgetM2, args.totalRoofM2);
   if (args.candidates.length === 0 || args.budgetM2 <= 0) {
-    return {
-      ...emptyCoolRoofPlan(args.budgetM2, args.totalRoofM2, "greedy-fallback", performance.now() - started),
-    };
+    return attachWindowComparison(
+      { ...emptyCoolRoofPlan(args.budgetM2, args.totalRoofM2, "exact-knapsack", performance.now() - started) },
+      windowFallback,
+    );
   }
 
   const db = await instantiateDuckDb();
   if (!db) {
-    return { ...fallback, queryLatencyMs: performance.now() - started };
+    return attachWindowComparison(
+      { ...exact, queryLatencyMs: performance.now() - started },
+      windowFallback,
+    );
   }
 
   const conn = await db.connect();
@@ -368,16 +374,20 @@ async function optimiseCoolRoofTargetsExclusive(args: {
       lastCum = cum;
       selected.push(candidate);
     }
-    return planFromSelected(
+    const windowPlan = planFromSelected(
       selected,
       args.budgetM2,
       args.totalRoofM2,
       "duckdb-wasm",
       performance.now() - started,
     );
+    return attachWindowComparison({ ...exact, queryLatencyMs: performance.now() - started }, windowPlan);
   } catch (error) {
     console.warn("[AERIS-HK] DuckDB cool-roof window query failed; using greedy fallback.", error);
-    return { ...fallback, queryLatencyMs: performance.now() - started };
+    return attachWindowComparison(
+      { ...exact, queryLatencyMs: performance.now() - started },
+      windowFallback,
+    );
   } finally {
     await conn.close();
   }

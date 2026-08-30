@@ -13,9 +13,11 @@ import {
 import type {
   BuildingFeature,
   BuildingHourState,
+  CoolRoofCandidate,
   CoolRoofPlan,
   DuckDbQueryBundle,
   HkoDiurnalEnvelope,
+  HospitalCode,
   PlaybackSpeed,
   PolicyImpact,
   PolicyState,
@@ -66,7 +68,10 @@ interface SimulationContextValue {
   haNowcast: HaNowcast | null;
   haError: string | null;
   coolRoofPlan: CoolRoofPlan | null;
+  coolRoofCandidates: CoolRoofCandidate[];
   totalRoofM2: number;
+  focusedHospital: HospitalCode | null;
+  setFocusedHospital: (code: HospitalCode | null) => void;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
@@ -137,6 +142,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [haNowcast, setHaNowcast] = useState<HaNowcast | null>(null);
   const [haError, setHaError] = useState<string | null>(null);
   const [coolRoofPlan, setCoolRoofPlan] = useState<CoolRoofPlan | null>(null);
+  const [focusedHospital, setFocusedHospital] = useState<HospitalCode | null>(null);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
   const budgetTouched = useRef(false);
@@ -367,7 +373,10 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       haNowcast,
       haError,
       coolRoofPlan,
+      coolRoofCandidates,
       totalRoofM2,
+      focusedHospital,
+      setFocusedHospital,
     }),
     [
       buildings,
@@ -390,7 +399,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       haNowcast,
       haError,
       coolRoofPlan,
+      coolRoofCandidates,
       totalRoofM2,
+      focusedHospital,
     ],
   );
 

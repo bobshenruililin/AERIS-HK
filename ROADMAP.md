@@ -49,6 +49,13 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Map gold outlines, HUD, and DH/WHO briefing show the selected set
 - [x] `npm run test:cool-roof` (greedy ≡ window prefix, shoelace area, ranking vs worst-set)
 
+### `/goal` Year-grade mission control
+
+- [x] Exact 0/1 knapsack targeting (beats prefix-greedy); DuckDB windows still rank
+- [x] Sun-tracked lighting, harbour fly-in, heat plumes, cool-roof discs, catchment arcs
+- [x] Mission strip + Gagge interrogation + sky-view / H/W physics
+- [x] 24-hour baseline vs scenario arrival sparkline
+
 ## Phase 3 — Operationalisation
 
 - [ ] Authentication and audit log for HA/DH users

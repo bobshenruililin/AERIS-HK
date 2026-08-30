@@ -2,6 +2,19 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.6.0] — 2026-08-30
+
+### Added
+
+- Exact 0/1 knapsack cool-roof selector (true maximum 24-hour admissions averted under the m² budget); DuckDB window functions still rank the same table for comparison.
+- Cinematic twin: harbour fly-in, sun-tracked lighting, CVI heat plumes, gold cool-roof discs, street spines, and hospital catchment arcs.
+- Mission strip with 24h baseline-vs-scenario arrival sparkline; Gagge S = M − W − E − R − C inspector; sky-view factor / canyon H/W; roof absorbed shortwave.
+- Click a hospital node to isolate catchment flow. Policy drawer reports knapsack vs window-greedy delta.
+
+### Changed
+
+- Canyon air temperature includes an Oke-style sky-view term. Confetti removed from the policy board.
+
 ## [0.5.0] — 2026-08-30
 
 ### Added

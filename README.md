@@ -13,7 +13,7 @@ Aerospace-grade urban microclimate digital twin and Hospital Authority cardiovas
 - First-principles Gagge 2-node + CVI + M/M/c (CMC, KWH, QEH)
 - Live HKO Open Data (`/api/hko/envelope`) for Kowloon T/RH, WHOT, and 9-day forecast anchors
 - Anonymised HA A&E nowcast (`/api/ha/nowcast`) — hospital aggregates only; M/M/c μ/c from Cat 1–3 mix
-- Cool-roof targeting optimiser — m² budget → DuckDB window-ranked building set maximising 24-hour admissions averted
+- Cool-roof targeting optimiser — exact 0/1 knapsack on m² budget (DuckDB window rank) maximising 24-hour admissions averted
 
 ## Quick start
 

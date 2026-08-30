@@ -23,7 +23,7 @@ export function MissionControl() {
         <BuildingInspector />
         <TimeScrubber />
         <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 md:block">
-          Synthetic morphology · not an official HKO / HA feed
+          Synthetic morphology · live HKO + HA aggregates · not an official product
         </div>
       </div>
     </SimulationProvider>

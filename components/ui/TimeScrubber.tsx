@@ -10,12 +10,15 @@ import { GlassPanel } from "./GlassPanel";
 const SPEEDS: PlaybackSpeed[] = [1, 2, 5];
 
 export function TimeScrubber() {
-  const { hour, setHour, playing, setPlaying, speed, setSpeed } = useSimulation();
+  const { hour, setHour, playing, setPlaying, speed, setSpeed, impact } = useSimulation();
   const elev = solarElevationDeg(hour);
   const solarTicks = Array.from({ length: 24 }, (_, h) => ({
     h,
     elev: solarElevationDeg(h + 0.5),
+    base: impact.hourlyBaselineArrivals?.[h] ?? 0,
+    scen: impact.hourlyScenarioArrivals?.[h] ?? 0,
   }));
+  const maxArr = Math.max(1, ...solarTicks.map((t) => Math.max(t.base, t.scen)));
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-3 md:p-4">
@@ -52,14 +55,22 @@ export function TimeScrubber() {
             ))}
           </div>
         </div>
-        <div className="mb-1 flex h-8 items-end gap-px">
+        <div className="mb-1 flex h-10 items-end gap-px">
           {solarTicks.map((tick) => (
-            <div
-              key={tick.h}
-              className="flex-1 rounded-t-sm bg-gradient-to-t from-cyan-500/10 to-amber-300/80"
-              style={{ height: `${Math.max(8, ((tick.elev + 5) / 90) * 100)}%`, opacity: tick.elev > 0 ? 0.9 : 0.25 }}
-              title={`${String(tick.h).padStart(2, "0")}:00 solar ${tick.elev.toFixed(0)}°`}
-            />
+            <div key={tick.h} className="relative flex flex-1 items-end">
+              <div
+                className="w-full rounded-t-sm bg-slate-500/35"
+                style={{ height: `${Math.max(6, (tick.base / maxArr) * 100)}%` }}
+              />
+              <div
+                className="absolute bottom-0 w-full rounded-t-sm bg-gradient-to-t from-cyan-500/40 to-amber-300/85"
+                style={{
+                  height: `${Math.max(6, (tick.scen / maxArr) * 100)}%`,
+                  opacity: tick.elev > 0 ? 0.95 : 0.45,
+                }}
+                title={`${String(tick.h).padStart(2, "0")}:00 solar ${tick.elev.toFixed(0)}° · λ ${tick.scen.toFixed(1)}`}
+              />
+            </div>
           ))}
         </div>
         <input
@@ -84,7 +95,8 @@ export function TimeScrubber() {
           <span>23:00</span>
         </div>
         <p className="mt-1 text-[10px] text-slate-400">
-          Solar elevation {elev.toFixed(1)}° · canyon lag sustains indoor heat after sunset in high-density tong lau.
+          Solar elevation {elev.toFixed(1)}° · bars are Cat 1–3 arrival rate (scenario over dim baseline) · canyon lag
+          sustains indoor heat after sunset in high-density tong lau.
         </p>
       </GlassPanel>
     </div>

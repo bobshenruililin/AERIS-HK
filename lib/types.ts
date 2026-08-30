@@ -111,7 +111,10 @@ export interface CoolRoofPlan {
   districtCoolRoofPercent: number;
   /** Sum of local-only ranking averted (not the full district-cooling impact). */
   predictedAdmissionsAverted: number;
-  engine: "duckdb-wasm" | "greedy-fallback";
+  engine: "exact-knapsack" | "duckdb-wasm" | "greedy-fallback";
+  rankEngine: "duckdb-wasm" | "greedy-fallback";
+  windowSelectedIds: string[];
+  windowAdmissionsAverted: number;
   queryLatencyMs: number;
 }
 
@@ -142,6 +145,9 @@ export interface BuildingHourState {
   gagge: GaggeNodeState;
   thermalLagHours: number;
   cardiovascularStrain: number;
+  skyViewFactor: number;
+  canyonAspect: number;
+  roofAbsorbedWm2: number;
 }
 
 export interface TriageMix {
@@ -199,6 +205,8 @@ export interface PolicyImpact {
   preventableMortalityPer100k: number;
   baselineMortalityIndex: number;
   scenarioMortalityIndex: number;
+  hourlyBaselineArrivals: number[];
+  hourlyScenarioArrivals: number[];
 }
 
 export interface DistrictHourAggregate {

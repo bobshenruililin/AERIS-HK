@@ -15,6 +15,17 @@ export const KOWLOON_VIEW = {
   maxZoom: 19.5,
 } as const;
 
+export const HARBOUR_APPROACH_VIEW = {
+  longitude: 114.1734,
+  latitude: 22.2938,
+  zoom: 13.35,
+  pitch: 48,
+  bearing: 18,
+  maxPitch: 75,
+  minZoom: 12.5,
+  maxZoom: 19.5,
+} as const;
+
 export const CARTO_DARK_MATTER_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 

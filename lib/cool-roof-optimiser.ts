@@ -78,6 +78,9 @@ export function emptyCoolRoofPlan(
     districtCoolRoofPercent: 0,
     predictedAdmissionsAverted: 0,
     engine,
+    rankEngine: engine === "duckdb-wasm" ? "duckdb-wasm" : "greedy-fallback",
+    windowSelectedIds: [],
+    windowAdmissionsAverted: 0,
     queryLatencyMs,
   };
 }
@@ -101,6 +104,9 @@ export function planFromSelected(
     districtCoolRoofPercent: districtCoolRoofPercent(selectedAreaM2, totalRoofM2),
     predictedAdmissionsAverted,
     engine,
+    rankEngine: engine === "duckdb-wasm" ? "duckdb-wasm" : "greedy-fallback",
+    windowSelectedIds: [],
+    windowAdmissionsAverted: 0,
     queryLatencyMs,
   };
 }

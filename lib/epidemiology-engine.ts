@@ -18,7 +18,8 @@ import {
   CATCHMENT_POPULATION,
 } from "./constants";
 import { HOSPITALS, type HospitalSpec } from "./hospitals";
-import { solarRadiationIndex } from "./solar";
+import { solarRadiationIndex, roofAbsorbedShortwaveWm2 } from "./solar";
+import { canyonMetrics } from "./canyon";
 import { clamp, lerp, wrapHour } from "./utils";
 import { getBuildings } from "./spatial-data";
 import type { HkoDiurnalEnvelope } from "./hko/types";
@@ -94,10 +95,12 @@ function canyonAirTemp(
 ): number {
   const regional = regionalAirTemp(hour, policy.coolRoofPercent, envelope);
   const ac = effectiveAcHeat(building, policy);
+  const { svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
   const canyon =
     1.55 * building.properties.ventilationBlockage +
     0.0145 * ac +
-    0.9 * building.properties.subdividedFlatDensity;
+    0.9 * building.properties.subdividedFlatDensity +
+    0.95 * (1 - svf);
   return regional + canyon;
 }
 
@@ -245,6 +248,7 @@ export function evaluateBuildingAtHour(
   const microWbgt = 0.68 * indoorWbgt + 0.32 * canyonWbgt;
   const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa, envelope);
   const cvi = buildingCardiovascularIndex(microWbgt, building, policy);
+  const { hw, svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
   return {
     buildingId: building.properties.id,
     hour: wrapHour(hour),
@@ -260,6 +264,9 @@ export function evaluateBuildingAtHour(
     gagge,
     thermalLagHours: thermalLagHours(building, policy),
     cardiovascularStrain: bishaiCardiovascularStrain(microWbgt, gagge.coreTempC, building, policy),
+    skyViewFactor: svf,
+    canyonAspect: hw,
+    roofAbsorbedWm2: roofAbsorbedShortwaveWm2(hour, localCoolRoofFraction(building, policy) >= 0.99),
   };
 }
 
@@ -285,6 +292,9 @@ function interpolateBuildingState(
     cvi,
     cviTier: classifyCvi(cvi),
     cardiovascularStrain: mix(a.cardiovascularStrain, b.cardiovascularStrain),
+    skyViewFactor: mix(a.skyViewFactor, b.skyViewFactor),
+    canyonAspect: mix(a.canyonAspect, b.canyonAspect),
+    roofAbsorbedWm2: mix(a.roofAbsorbedWm2, b.roofAbsorbedWm2),
     gagge: {
       metabolicRate: mix(a.gagge.metabolicRate, b.gagge.metabolicRate),
       externalWork: mix(a.gagge.externalWork, b.gagge.externalWork),
@@ -576,9 +586,14 @@ export function computePolicyImpact(
   let baselineDef = 0;
   let scenarioDef = 0;
 
+  const hourlyBaselineArrivals: number[] = [];
+  const hourlyScenarioArrivals: number[] = [];
+
   for (let hour = 0; hour < 24; hour += 1) {
     const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope, nowcast);
     const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope, nowcast);
+    hourlyBaselineArrivals.push(base.totalCat13Arrivals);
+    hourlyScenarioArrivals.push(scen.totalCat13Arrivals);
     baselineAdmissions24h += base.totalCat13Arrivals;
     scenarioAdmissions24h += scen.totalCat13Arrivals;
     const baseMort = base.hospitals.reduce((s, h) => s + h.relativeMortalityIndex, 0) / 3;
@@ -609,6 +624,8 @@ export function computePolicyImpact(
     preventableMortalityPer100k,
     baselineMortalityIndex: baselineMort,
     scenarioMortalityIndex: scenarioMort,
+    hourlyBaselineArrivals,
+    hourlyScenarioArrivals,
   };
 }
 

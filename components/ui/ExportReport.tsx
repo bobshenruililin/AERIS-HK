@@ -149,8 +149,8 @@ export function ExportReport() {
               <p>
                 Night cooling shelters: {policy.coolingShelters}/30 · DHC nurse outreach: {policy.dhcOutreach}% ·
                 Cool-roof albedo budget: {Math.round(policy.coolRoofBudgetM2)} m² targeting {policy.coolRoofTargetIds.length}{" "}
-                roofs ({Math.round(coolRoofPlan?.selectedAreaM2 ?? 0)} m² selected, district albedo{" "}
-                {policy.coolRoofPercent.toFixed(1)}/50 via {coolRoofPlan?.engine ?? "pending"}) · AC heat deflection
+                roofs via exact 0/1 knapsack ({Math.round(coolRoofPlan?.selectedAreaM2 ?? 0)} m² selected, district albedo{" "}
+                {policy.coolRoofPercent.toFixed(1)}/50, rank engine {coolRoofPlan?.rankEngine ?? "pending"}) · AC heat deflection
                 bylaw: {policy.acDeflectionBylaw ? "IN FORCE" : "not enacted"}.
               </p>
               <p>

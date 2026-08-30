@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Shield, ThermometerSun, UserRound, Building } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "@/components/ui/GlassPanel";
@@ -8,27 +8,15 @@ import { BASELINE_POLICY } from "@/lib/types";
 
 export function PolicyDrawer() {
   const { policy, setPolicy, resetPolicy, impact, coolRoofPlan, totalRoofM2, buildings } = useSimulation();
-  const celebrated = useRef(false);
-
-  useEffect(() => {
-    if (impact.admissionsAverted >= 18 && !celebrated.current) {
-      celebrated.current = true;
-      void import("canvas-confetti").then((mod) => {
-        void mod.default({
-          particleCount: 90,
-          spread: 76,
-          origin: { y: 0.18, x: 0.82 },
-          colors: ["#22d3ee", "#34d399", "#fbbf24", "#f43f5e"],
-        });
-      });
-    }
-    if (impact.admissionsAverted < 8) {
-      celebrated.current = false;
-    }
-  }, [impact.admissionsAverted]);
+  const windowDelta =
+    (coolRoofPlan?.predictedAdmissionsAverted ?? 0) - (coolRoofPlan?.windowAdmissionsAverted ?? 0);
+  const eta =
+    (coolRoofPlan?.selectedAreaM2 ?? 0) > 0
+      ? impact.admissionsAverted / coolRoofPlan!.selectedAreaM2
+      : 0;
 
   return (
-    <div className="pointer-events-none absolute right-0 top-52 z-20 w-full max-w-sm p-3 md:top-52 md:p-4">
+    <div className="pointer-events-none absolute right-0 top-64 z-20 w-full max-w-sm p-3 md:top-64 md:p-4">
       <GlassPanel>
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
@@ -94,12 +82,20 @@ export function PolicyDrawer() {
               {Math.round(coolRoofPlan?.remainingBudgetM2 ?? Math.max(0, policy.coolRoofBudgetM2))} m² left
             </span>
             <span className="font-mono" data-testid="cool-roof-engine">
-              {coolRoofPlan?.engine === "duckdb-wasm" ? "DuckDB windows" : "greedy fallback"}
+              exact knapsack
+              {coolRoofPlan?.rankEngine === "duckdb-wasm" ? " · DuckDB windows" : ""}
             </span>
           </div>
           <div className="mt-1 text-[10px] text-slate-500">
-            District albedo {policy.coolRoofPercent.toFixed(1)} / 50 · local ranking averted{" "}
+            District albedo {policy.coolRoofPercent.toFixed(1)} / 50 · knapsack averted{" "}
             {(coolRoofPlan?.predictedAdmissionsAverted ?? 0).toFixed(2)}
+            {coolRoofPlan && coolRoofPlan.windowSelectedIds.length > 0
+              ? ` · window greedy ${(coolRoofPlan.windowAdmissionsAverted).toFixed(2)}${
+                  windowDelta > 0.001 ? ` (+${windowDelta.toFixed(2)} exact)` : ""
+                }`
+              : ""}
+            {" · "}
+            {eta.toExponential(2)} admissions / m²
           </div>
         </div>
 
@@ -136,9 +132,9 @@ export function PolicyDrawer() {
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
           Deltas versus a zero-intervention counterfactual ({BASELINE_POLICY.coolingShelters} shelters, no DHC, no albedo, no bylaw).
-          Cool-roof targeting maximises 24-hour admissions averted for the m² budget via DuckDB{" "}
-          <span className="font-mono">ROW_NUMBER</span>/<span className="font-mono">SUM OVER</span> windows.
-          Gagge heat storage and Bishai-style relative risk drive M/M/c arrivals at CMC, KWH and QEH.
+          Cool-roof targeting solves an exact 0/1 knapsack on 24-hour admissions averted / m² (DuckDB{" "}
+          <span className="font-mono">ROW_NUMBER</span>/<span className="font-mono">SUM OVER</span> ranks the same
+          table). Gagge S = M − W − E − R − C and Bishai-style relative risk drive M/M/c arrivals at CMC, KWH and QEH.
         </p>
       </GlassPanel>
     </div>

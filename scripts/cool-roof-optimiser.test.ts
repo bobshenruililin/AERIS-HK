@@ -15,6 +15,9 @@ import { decodeFootprintsIpc, encodeFootprintsIpc, footprintsFromBuildings } fro
 import { computePolicyImpact, indoorAirTemp, localCoolRoofFraction } from "../lib/epidemiology-engine";
 import { getBuildings } from "../lib/spatial-data";
 import { BASELINE_POLICY, DEFAULT_COOL_ROOF_STOCK_FRACTION, DEFAULT_POLICY } from "../lib/types";
+import { selectCoolRoofsKnapsack } from "../lib/cool-roof-knapsack";
+import { canyonAspectRatio, skyViewFactor } from "../lib/canyon";
+import { roofAbsorbedShortwaveWm2, solarAzimuthDeg, sunDirectionVec } from "../lib/solar";
 import type { CoolRoofCandidate } from "../lib/types";
 
 const HAND_SET: CoolRoofCandidate[] = [
@@ -224,5 +227,49 @@ describe("per-building cool-roof physics and 24h ranking", () => {
       greedyImpact.admissionsAverted > wasteImpact.admissionsAverted,
       `greedy ${greedyImpact.admissionsAverted} vs worst-set ${wasteImpact.admissionsAverted}`,
     );
+    assert.equal(greedyImpact.hourlyBaselineArrivals.length, 24);
+    assert.equal(greedyImpact.hourlyScenarioArrivals.length, 24);
+  });
+});
+
+describe("exact 0/1 knapsack vs window prefix", () => {
+  it("recovers a+c at budget 100 where prefix greedy stops at a", () => {
+    const exact = selectCoolRoofsKnapsack(HAND_SET, 100, 350);
+    const greedy = selectCoolRoofsGreedyJs(HAND_SET, 100, 350);
+    assert.ok(exact.selectedAreaM2 <= 100 + 1e-6);
+    assert.deepEqual([...exact.selectedIds].sort(), ["a", "c"]);
+    assert.equal(exact.predictedAdmissionsAverted, 14);
+    assert.equal(greedy.predictedAdmissionsAverted, 12);
+    assert.ok(exact.predictedAdmissionsAverted > greedy.predictedAdmissionsAverted);
+    assert.equal(exact.engine, "exact-knapsack");
+  });
+
+  it("never exceeds budget on the live twin", () => {
+    const buildings = getBuildings();
+    const budget = defaultCoolRoofBudgetM2(buildings);
+    const candidates = rankCoolRoofCandidates(buildings, null, DEFAULT_POLICY);
+    const exact = selectCoolRoofsKnapsack(candidates, budget, totalRoofAreaM2(buildings));
+    const greedy = selectCoolRoofsGreedyJs(candidates, budget, totalRoofAreaM2(buildings));
+    assert.ok(exact.selectedAreaM2 <= budget + 1e-6);
+    assert.ok(exact.predictedAdmissionsAverted + 1e-9 >= greedy.predictedAdmissionsAverted);
+  });
+});
+
+describe("canyon sky-view and solar geometry", () => {
+  it("SVF falls as H/W rises and stays in (0,1)", () => {
+    assert.ok(skyViewFactor(0.2) > skyViewFactor(3));
+    assert.ok(skyViewFactor(1) > 0.2 && skyViewFactor(1) < 0.9);
+    const hw = canyonAspectRatio(24, 168);
+    assert.ok(hw > 1 && hw < 3);
+  });
+
+  it("sun direction is a unit-ish vector and azimuth is finite", () => {
+    const az = solarAzimuthDeg(12);
+    assert.ok(Number.isFinite(az) && az >= 0 && az < 360);
+    const d = sunDirectionVec(15);
+    const mag = Math.hypot(d[0], d[1], d[2]);
+    assert.ok(mag > 0.2 && mag < 1.6);
+    assert.ok(roofAbsorbedShortwaveWm2(15, true) < roofAbsorbedShortwaveWm2(15, false));
+    assert.equal(roofAbsorbedShortwaveWm2(3, false), 0);
   });
 });
