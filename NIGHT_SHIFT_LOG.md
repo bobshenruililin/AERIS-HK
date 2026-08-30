@@ -68,7 +68,19 @@ Decade observatory (2016–2026) is **not** replaced. Scenarios overlay the live
 - `components/ui/CommandPalette.tsx`, `ControlDock.tsx`, `HudDrawer.tsx`, `MonteCarloPanel.tsx`
 - `scripts/solar-engine.test.ts`, `scripts/monte-carlo.test.ts`, `scripts/scenarios.test.ts`
 
-## Non-goals kept honest
+## 04:05 HKT — Browser walkthrough (headless Chrome, production `next start`)
+
+Verified against `http://127.0.0.1:3000/`:
+
+- Control dock presets 1–4 present; twin canvas mounted.
+- Preset 3 exposes every policy slider, cool-roof knapsack card, Monte Carlo 95% CI panel, and the three scenario chips.
+- July 2022 and District Blackout load without stripping sliders.
+- `Ctrl+K` palette filters Pei Ho footprints; Enter pins the inspector with Biophysics / Demographics / Inpatient surge tabs and live Gagge `S = M − W − E − R − C`.
+- Preset 4 opens `clinical-briefing` (existing DH/WHO print surface).
+- Zero-deletion DOM check: `admissions-averted`, `decade-years`, `mission-strip` still present when docked.
+
+Screenshots: `/opt/cursor/artifacts/preset-1-strategic.png`, `preset-2-canyon.png`, `preset-3-policy.png`, `command-palette.png`, `inspector-hud.png`, `preset-4-briefing.png`.
+
 
 - No metric, slider, or simulation feature was removed.
 - Figma/Notion/Canva MCP remain desktop-auth-only in this cloud; the HUD uses the existing `lib/tokens.ts` cyan/amber glass language.
