@@ -26,6 +26,18 @@ export function BuildingInspector() {
   const id = selectedId ?? hoveredId;
   const feature = buildings.find((b) => b.properties.id === id);
   const expanded = isDrawerExpanded("inspector") || Boolean(selectedId);
+  const [pinStyle, setPinStyle] = useState<{ left: number; top: number } | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    if (!selectedId || !inspectorAnchor) {
+      setPinStyle(undefined);
+      return;
+    }
+    setPinStyle({
+      left: Math.min(window.innerWidth - 380, Math.max(12, inspectorAnchor.x - 40)),
+      top: Math.min(window.innerHeight - 320, Math.max(72, inspectorAnchor.y - 20)),
+    });
+  }, [selectedId, inspectorAnchor]);
 
   if (!feature || !state) {
     return null;
@@ -51,19 +63,6 @@ export function BuildingInspector() {
         1;
 
   const pinned = Boolean(selectedId && inspectorAnchor);
-  const [pinStyle, setPinStyle] = useState<{ left: number; top: number } | undefined>(undefined);
-
-  useLayoutEffect(() => {
-    if (!selectedId || !inspectorAnchor) {
-      setPinStyle(undefined);
-      return;
-    }
-    setPinStyle({
-      left: Math.min(window.innerWidth - 380, Math.max(12, inspectorAnchor.x - 40)),
-      top: Math.min(window.innerHeight - 320, Math.max(72, inspectorAnchor.y - 20)),
-    });
-  }, [selectedId, inspectorAnchor]);
-
   const tabs: Array<{ id: InspectorTab; label: string }> = [
     { id: "biophysics", label: "Thermal Infiltration" },
     { id: "demographics", label: "Demographic Risk" },
