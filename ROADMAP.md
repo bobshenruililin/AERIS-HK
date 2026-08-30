@@ -92,6 +92,7 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Multi-objective NSGA-II Pareto solver (500 generations, Web Worker): cost / Cat 1–3 averted / tenement ΔGini / peak HVAC MW; click-to-apply levers on the 3D twin
 - [x] Live HKO telemetry + IDW Kowloon microclimate field (Sham Shui Po / King's Park / Kai Tak) and 250 LoRaWAN 劏房 sensors; LIVE MONITORING vs PREDICTIVE TWIN HUD
 - [x] Executive Presentation Suite: cinematic camera keyframes (4 narrative beats), Web Audio UTCI/WBGT drone + Sol-Air hover ticks, A4 PDF/PNG briefing export
+- [x] Production Readiness Review: zero-allocation 60 FPS paths, WebGL restore, ISO/VDI verification harness, SystemHealthOverlay, `PRR.md`
 - [ ] Figma / Notion / Canva / Drive MCP (requires Cursor desktop authentication)
 - [ ] Authentication and audit log for HA/DH users (login)
 - [ ] Traditional Chinese screen-reader pass and WCAG contrast on glass panels

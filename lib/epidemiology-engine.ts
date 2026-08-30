@@ -3,6 +3,7 @@ import type {
   BuildingHourState,
   CviRiskTier,
   DistrictName,
+  GaggeNodeState,
   HkoHeatStatus,
   HospitalHourState,
   PolicyImpact,
@@ -467,7 +468,8 @@ export function evaluateBuildingAtHour(
   };
 }
 
-function interpolateBuildingState(
+function interpolateBuildingStateInto(
+  out: BuildingHourState,
   a: BuildingHourState,
   b: BuildingHourState,
   t: number,
@@ -476,49 +478,120 @@ function interpolateBuildingState(
   const mix = (x: number, y: number) => lerp(x, y, t);
   const microWbgt = mix(a.microWbgt, b.microWbgt);
   const cvi = mix(a.cvi, b.cvi);
+  out.buildingId = a.buildingId;
+  out.hour = hour;
+  out.outdoorTa = mix(a.outdoorTa, b.outdoorTa);
+  out.indoorTa = mix(a.indoorTa, b.indoorTa);
+  out.globeTemp = mix(a.globeTemp, b.globeTemp);
+  out.wetBulbTemp = mix(a.wetBulbTemp, b.wetBulbTemp);
+  out.canyonWbgt = mix(a.canyonWbgt, b.canyonWbgt);
+  out.indoorWbgt = mix(a.indoorWbgt, b.indoorWbgt);
+  out.microWbgt = microWbgt;
+  out.cvi = cvi;
+  out.cviTier = classifyCvi(cvi);
+  out.thermalLagHours = a.thermalLagHours;
+  out.cardiovascularStrain = mix(a.cardiovascularStrain, b.cardiovascularStrain);
+  out.skyViewFactor = mix(a.skyViewFactor, b.skyViewFactor);
+  out.canyonAspect = mix(a.canyonAspect, b.canyonAspect);
+  out.roofAbsorbedWm2 = mix(a.roofAbsorbedWm2, b.roofAbsorbedWm2);
+  out.solarElevationDeg = mix(a.solarElevationDeg ?? 0, b.solarElevationDeg ?? 0);
+  out.solarAzimuthDeg = mix(a.solarAzimuthDeg ?? 0, b.solarAzimuthDeg ?? 0);
+  out.canyonDirectBeamFrac = mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1);
+  out.canyonShadowed = mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1) < 0.5;
+  out.indoorWetBulbC = mix(a.indoorWetBulbC ?? a.wetBulbTemp, b.indoorWetBulbC ?? b.wetBulbTemp);
+  out.pmv = mix(a.pmv ?? 0, b.pmv ?? 0);
+  out.ppd = mix(a.ppd ?? 0, b.ppd ?? 0);
+  out.thermalBatteryC = mix(a.thermalBatteryC ?? 0, b.thermalBatteryC ?? 0);
+  out.wbgtDifferentialC = mix(a.wbgtDifferentialC ?? 0, b.wbgtDifferentialC ?? 0);
+  out.aeSurgeCat1 = mix(a.aeSurgeCat1 ?? 0, b.aeSurgeCat1 ?? 0);
+  out.aeSurgeCat2 = mix(a.aeSurgeCat2 ?? 0, b.aeSurgeCat2 ?? 0);
+  out.aeSurgeCat3 = mix(a.aeSurgeCat3 ?? 0, b.aeSurgeCat3 ?? 0);
+  const gagge = out.gagge;
+  gagge.metabolicRate = mix(a.gagge.metabolicRate, b.gagge.metabolicRate);
+  gagge.externalWork = mix(a.gagge.externalWork, b.gagge.externalWork);
+  gagge.evaporativeLoss = mix(a.gagge.evaporativeLoss, b.gagge.evaporativeLoss);
+  gagge.radiativeLoss = mix(a.gagge.radiativeLoss, b.gagge.radiativeLoss);
+  gagge.convectiveLoss = mix(a.gagge.convectiveLoss, b.gagge.convectiveLoss);
+  gagge.heatStorage = mix(a.gagge.heatStorage, b.gagge.heatStorage);
+  gagge.skinTempC = mix(a.gagge.skinTempC, b.gagge.skinTempC);
+  gagge.coreTempC = mix(a.gagge.coreTempC, b.gagge.coreTempC);
+  gagge.airVelocityMs = mix(a.gagge.airVelocityMs, b.gagge.airVelocityMs);
+  return out;
+}
+
+function emptyGagge(): GaggeNodeState {
   return {
-    ...a,
-    hour,
-    outdoorTa: mix(a.outdoorTa, b.outdoorTa),
-    indoorTa: mix(a.indoorTa, b.indoorTa),
-    globeTemp: mix(a.globeTemp, b.globeTemp),
-    wetBulbTemp: mix(a.wetBulbTemp, b.wetBulbTemp),
-    canyonWbgt: mix(a.canyonWbgt, b.canyonWbgt),
-    indoorWbgt: mix(a.indoorWbgt, b.indoorWbgt),
-    microWbgt,
-    cvi,
-    cviTier: classifyCvi(cvi),
-    cardiovascularStrain: mix(a.cardiovascularStrain, b.cardiovascularStrain),
-    skyViewFactor: mix(a.skyViewFactor, b.skyViewFactor),
-    canyonAspect: mix(a.canyonAspect, b.canyonAspect),
-    roofAbsorbedWm2: mix(a.roofAbsorbedWm2, b.roofAbsorbedWm2),
-    solarElevationDeg: mix(a.solarElevationDeg ?? 0, b.solarElevationDeg ?? 0),
-    solarAzimuthDeg: mix(a.solarAzimuthDeg ?? 0, b.solarAzimuthDeg ?? 0),
-    canyonDirectBeamFrac: mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1),
-    canyonShadowed: mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1) < 0.5,
-    indoorWetBulbC: mix(a.indoorWetBulbC ?? a.wetBulbTemp, b.indoorWetBulbC ?? b.wetBulbTemp),
-    pmv: mix(a.pmv ?? 0, b.pmv ?? 0),
-    ppd: mix(a.ppd ?? 0, b.ppd ?? 0),
-    thermalBatteryC: mix(a.thermalBatteryC ?? 0, b.thermalBatteryC ?? 0),
-    wbgtDifferentialC: mix(a.wbgtDifferentialC ?? 0, b.wbgtDifferentialC ?? 0),
-    aeSurgeCat1: mix(a.aeSurgeCat1 ?? 0, b.aeSurgeCat1 ?? 0),
-    aeSurgeCat2: mix(a.aeSurgeCat2 ?? 0, b.aeSurgeCat2 ?? 0),
-    aeSurgeCat3: mix(a.aeSurgeCat3 ?? 0, b.aeSurgeCat3 ?? 0),
-    gagge: {
-      metabolicRate: mix(a.gagge.metabolicRate, b.gagge.metabolicRate),
-      externalWork: mix(a.gagge.externalWork, b.gagge.externalWork),
-      evaporativeLoss: mix(a.gagge.evaporativeLoss, b.gagge.evaporativeLoss),
-      radiativeLoss: mix(a.gagge.radiativeLoss, b.gagge.radiativeLoss),
-      convectiveLoss: mix(a.gagge.convectiveLoss, b.gagge.convectiveLoss),
-      heatStorage: mix(a.gagge.heatStorage, b.gagge.heatStorage),
-      skinTempC: mix(a.gagge.skinTempC, b.gagge.skinTempC),
-      coreTempC: mix(a.gagge.coreTempC, b.gagge.coreTempC),
-      airVelocityMs: mix(a.gagge.airVelocityMs, b.gagge.airVelocityMs),
-    },
+    metabolicRate: 0,
+    externalWork: 0,
+    evaporativeLoss: 0,
+    radiativeLoss: 0,
+    convectiveLoss: 0,
+    heatStorage: 0,
+    skinTempC: 0,
+    coreTempC: 0,
+    airVelocityMs: 0,
   };
 }
 
-export function evaluateBuildingInterpolated(
+function emptyBuildingHourState(): BuildingHourState {
+  return {
+    buildingId: "",
+    hour: 0,
+    outdoorTa: 0,
+    indoorTa: 0,
+    globeTemp: 0,
+    wetBulbTemp: 0,
+    canyonWbgt: 0,
+    indoorWbgt: 0,
+    microWbgt: 0,
+    cvi: 0,
+    cviTier: "low",
+    gagge: emptyGagge(),
+    thermalLagHours: 0,
+    cardiovascularStrain: 0,
+    skyViewFactor: 0,
+    canyonAspect: 0,
+    roofAbsorbedWm2: 0,
+    solarElevationDeg: 0,
+    solarAzimuthDeg: 0,
+    canyonDirectBeamFrac: 1,
+    canyonShadowed: false,
+    indoorWetBulbC: 0,
+    pmv: 0,
+    ppd: 5,
+    thermalBatteryC: 0,
+    wbgtDifferentialC: 0,
+    aeSurgeCat1: 0,
+    aeSurgeCat2: 0,
+    aeSurgeCat3: 0,
+  };
+}
+
+function copyBuildingStateInto(out: BuildingHourState, src: BuildingHourState): BuildingHourState {
+  interpolateBuildingStateInto(out, src, src, 0, src.hour);
+  out.buildingId = src.buildingId;
+  out.cviTier = src.cviTier;
+  out.thermalLagHours = src.thermalLagHours;
+  out.canyonShadowed = src.canyonShadowed;
+  return out;
+}
+
+const BUILDING_STATE_POOL: BuildingHourState[] = [];
+const BUILDING_STATE_VIEW: BuildingHourState[] = [];
+
+function acquireBuildingStates(n: number): BuildingHourState[] {
+  while (BUILDING_STATE_POOL.length < n) {
+    BUILDING_STATE_POOL.push(emptyBuildingHourState());
+  }
+  BUILDING_STATE_VIEW.length = n;
+  for (let i = 0; i < n; i += 1) {
+    BUILDING_STATE_VIEW[i] = BUILDING_STATE_POOL[i];
+  }
+  return BUILDING_STATE_VIEW;
+}
+
+export function evaluateBuildingInterpolatedInto(
+  out: BuildingHourState,
   building: BuildingFeature,
   hour: number,
   policy: PolicyState,
@@ -534,11 +607,42 @@ export function evaluateBuildingInterpolated(
   const [lon, lat] = buildingCentroid(building);
   const spatial = spatialWx?.(lon, lat) ?? null;
   if (t < 1e-6) {
-    return cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing, spatial);
+    const src =
+      cache?.get(`${building.properties.id}:${h0}`) ??
+      evaluateBuildingAtHour(building, h0, policy, envelope, forcing, spatial);
+    copyBuildingStateInto(out, src);
+    out.hour = h;
+    return out;
   }
-  const a = cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing, spatial);
-  const b = cache?.get(`${building.properties.id}:${h1}`) ?? evaluateBuildingAtHour(building, h1, policy, envelope, forcing, spatial);
-  return interpolateBuildingState(a, b, t, h);
+  const a =
+    cache?.get(`${building.properties.id}:${h0}`) ??
+    evaluateBuildingAtHour(building, h0, policy, envelope, forcing, spatial);
+  const b =
+    cache?.get(`${building.properties.id}:${h1}`) ??
+    evaluateBuildingAtHour(building, h1, policy, envelope, forcing, spatial);
+  interpolateBuildingStateInto(out, a, b, t, h);
+  return out;
+}
+
+export function evaluateBuildingInterpolated(
+  building: BuildingFeature,
+  hour: number,
+  policy: PolicyState,
+  cache?: Map<string, BuildingHourState>,
+  envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatialWx: SpatialWxLookup | null = null,
+): BuildingHourState {
+  return evaluateBuildingInterpolatedInto(
+    emptyBuildingHourState(),
+    building,
+    hour,
+    policy,
+    cache,
+    envelope,
+    forcing,
+    spatialWx,
+  );
 }
 
 function factorialTermProduct(lambdaOverMu: number, n: number): number {
@@ -755,25 +859,40 @@ export function evaluateSystemAtHour(
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
   spatialWx: SpatialWxLookup | null = null,
 ): SystemHourSnapshot {
-  const buildingStates = buildings.map((b) =>
-    evaluateBuildingInterpolated(b, hour, policy, cache, envelope, forcing, spatialWx),
-  );
+  const buildingStates = acquireBuildingStates(buildings.length);
+  for (let i = 0; i < buildings.length; i += 1) {
+    evaluateBuildingInterpolatedInto(
+      buildingStates[i],
+      buildings[i],
+      hour,
+      policy,
+      cache,
+      envelope,
+      forcing,
+      spatialWx,
+    );
+  }
+  const published = new Array<BuildingHourState>(buildings.length);
+  for (let i = 0; i < buildings.length; i += 1) {
+    published[i] = emptyBuildingHourState();
+    copyBuildingStateInto(published[i], buildingStates[i]);
+  }
   const hospitalsRaw = HOSPITALS.map((spec) =>
-    evaluateHospital(spec, hour, buildingStates, buildings, policy, nowcast, forcing),
+    evaluateHospital(spec, hour, published, buildings, policy, nowcast, forcing),
   );
   const { hospitals, plan } = rebalanceClusterLoad(hospitalsRaw);
   const regionalMeanWbgt =
-    buildingStates.reduce((s, b) => s + b.microWbgt, 0) / Math.max(1, buildingStates.length);
+    published.reduce((s, b) => s + b.microWbgt, 0) / Math.max(1, published.length);
   const regionalMeanCvi =
-    buildingStates.reduce((s, b) => s + b.cvi, 0) / Math.max(1, buildingStates.length);
+    published.reduce((s, b) => s + b.cvi, 0) / Math.max(1, published.length);
   const meanOutdoor =
-    buildingStates.reduce((s, b) => s + b.outdoorTa, 0) / Math.max(1, buildingStates.length);
+    published.reduce((s, b) => s + b.outdoorTa, 0) / Math.max(1, published.length);
   const clusterBedStress =
     hospitals.reduce((s, h) => s + h.bedOccupancy, 0) / Math.max(1, hospitals.length);
   const totalCat13Arrivals = hospitals.reduce((s, h) => s + h.arrivals.total, 0);
   return {
     hour: wrapHour(hour),
-    buildings: buildingStates,
+    buildings: published,
     hospitals,
     regionalMeanWbgt,
     regionalMeanCvi,

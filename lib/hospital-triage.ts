@@ -99,6 +99,8 @@ export interface AmbulanceParticle {
   to: HospitalCode;
   arterial: TransferArterial;
   path: LonLat[];
+  /** Cached polyline length (metres). Avoids recomputing haversine each rAF step. */
+  pathLengthM: number;
 }
 
 export interface ArterialStroke {
@@ -141,7 +143,12 @@ export function pathForTransfer(from: HospitalCode, to: HospitalCode): { arteria
   throw new Error(`No ambulance arterial from ${from} to ${to}`);
 }
 
-function polylineLengthM(path: LonLat[]): number {
+const PATH_LENGTH_CACHE = new WeakMap<LonLat[], number>();
+const POINT_SCRATCH: LonLat = [114.17, 22.32];
+
+export function polylineLengthM(path: LonLat[]): number {
+  const cached = PATH_LENGTH_CACHE.get(path);
+  if (cached != null) return cached;
   let acc = 0;
   for (let i = 1; i < path.length; i += 1) {
     const [lon0, lat0] = path[i - 1];
@@ -150,15 +157,29 @@ function polylineLengthM(path: LonLat[]): number {
     const dLon = (lon1 - lon0) * 111_320 * Math.cos(((lat0 + lat1) * 0.5 * Math.PI) / 180);
     acc += Math.hypot(dLon, dLat);
   }
+  PATH_LENGTH_CACHE.set(path, acc);
   return acc;
 }
 
-export function pointAlongPolyline(path: LonLat[], t: number): LonLat {
+export function pointAlongPolylineInto(out: LonLat, path: LonLat[], t: number, totalLen?: number): LonLat {
   const u = ((t % 1) + 1) % 1;
-  if (path.length === 0) return [114.17, 22.32];
-  if (path.length === 1 || u <= 0) return path[0];
-  if (u >= 1) return path[path.length - 1];
-  const total = polylineLengthM(path);
+  if (path.length === 0) {
+    out[0] = 114.17;
+    out[1] = 22.32;
+    return out;
+  }
+  if (path.length === 1 || u <= 0) {
+    out[0] = path[0][0];
+    out[1] = path[0][1];
+    return out;
+  }
+  if (u >= 1) {
+    const last = path[path.length - 1];
+    out[0] = last[0];
+    out[1] = last[1];
+    return out;
+  }
+  const total = totalLen ?? polylineLengthM(path);
   let remain = u * total;
   for (let i = 1; i < path.length; i += 1) {
     const a = path[i - 1];
@@ -168,11 +189,21 @@ export function pointAlongPolyline(path: LonLat[], t: number): LonLat {
     const seg = Math.hypot(dLon, dLat) || 1e-6;
     if (remain <= seg) {
       const f = remain / seg;
-      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+      out[0] = a[0] + (b[0] - a[0]) * f;
+      out[1] = a[1] + (b[1] - a[1]) * f;
+      return out;
     }
     remain -= seg;
   }
-  return path[path.length - 1];
+  const last = path[path.length - 1];
+  out[0] = last[0];
+  out[1] = last[1];
+  return out;
+}
+
+export function pointAlongPolyline(path: LonLat[], t: number): LonLat {
+  const pt = pointAlongPolylineInto(POINT_SCRATCH, path, t);
+  return [pt[0], pt[1]];
 }
 
 function isSource(code: HospitalCode): boolean {
@@ -297,16 +328,36 @@ export function planFingerprint(plan: LoadBalancePlan | null | undefined): strin
   return plan.legs.map((leg) => `${leg.from}:${leg.to}:${leg.patients.toFixed(2)}`).join("|");
 }
 
+const EMPTY_STROKES: ArterialStroke[] = [];
+const STROKE_POOL: ArterialStroke[] = [];
+
 export function arterialStrokes(plan: LoadBalancePlan | null | undefined): ArterialStroke[] {
-  if (!plan?.triggered) return [];
-  return plan.legs.map((leg) => ({
-    id: `${leg.from}-${leg.to}`,
-    arterial: leg.arterial,
-    path: leg.path,
-    patients: leg.patients,
-    from: leg.from,
-    to: leg.to,
-  }));
+  if (!plan?.triggered) return EMPTY_STROKES;
+  const n = plan.legs.length;
+  for (let i = 0; i < n; i += 1) {
+    const leg = plan.legs[i];
+    let stroke = STROKE_POOL[i];
+    if (!stroke) {
+      stroke = {
+        id: `${leg.from}-${leg.to}`,
+        arterial: leg.arterial,
+        path: leg.path,
+        patients: leg.patients,
+        from: leg.from,
+        to: leg.to,
+      };
+      STROKE_POOL[i] = stroke;
+    } else {
+      stroke.id = `${leg.from}-${leg.to}`;
+      stroke.arterial = leg.arterial;
+      stroke.path = leg.path;
+      stroke.patients = leg.patients;
+      stroke.from = leg.from;
+      stroke.to = leg.to;
+    }
+  }
+  STROKE_POOL.length = n;
+  return STROKE_POOL;
 }
 
 export function createAmbulanceParticles(plan: LoadBalancePlan | null | undefined, nowMs = 0): AmbulanceParticle[] {
@@ -316,7 +367,8 @@ export function createAmbulanceParticles(plan: LoadBalancePlan | null | undefine
     const n = Math.max(1, Math.round(leg.patients / PATIENTS_PER_AMBULANCE));
     for (let i = 0; i < n; i += 1) {
       const progress = ((i / n) + (nowMs % 12_000) / 12_000) % 1;
-      const [lon, lat] = pointAlongPolyline(leg.path, progress);
+      const pathLengthM = polylineLengthM(leg.path);
+      const [lon, lat] = pointAlongPolylineInto(POINT_SCRATCH, leg.path, progress, pathLengthM);
       out.push({
         id: `${leg.from}-${leg.to}-${i}`,
         lon,
@@ -326,6 +378,7 @@ export function createAmbulanceParticles(plan: LoadBalancePlan | null | undefine
         to: leg.to,
         arterial: leg.arterial,
         path: leg.path,
+        pathLengthM,
       });
     }
   }
@@ -334,11 +387,14 @@ export function createAmbulanceParticles(plan: LoadBalancePlan | null | undefine
 
 export function advectAmbulanceParticles(particles: AmbulanceParticle[], dt: number): AmbulanceParticle[] {
   const speed = 0.085;
-  return particles.map((p) => {
-    const progress = (p.progress + dt * speed) % 1;
-    const [lon, lat] = pointAlongPolyline(p.path, progress);
-    return { ...p, progress, lon, lat };
-  });
+  for (let i = 0; i < particles.length; i += 1) {
+    const p = particles[i];
+    p.progress = (p.progress + dt * speed) % 1;
+    pointAlongPolylineInto(POINT_SCRATCH, p.path, p.progress, p.pathLengthM);
+    p.lon = POINT_SCRATCH[0];
+    p.lat = POINT_SCRATCH[1];
+  }
+  return particles;
 }
 
 export function isLoadBalanceSource(code: HospitalCode): boolean {

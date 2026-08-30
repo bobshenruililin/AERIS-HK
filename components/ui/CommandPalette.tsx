@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Building2, Command, Database, Layers, MapPin, ThermometerSun, Wind, Zap } from "lucide-react";
+import { Building2, Command, Database, Layers, MapPin, Stethoscope, ThermometerSun, Wind, Zap } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { POLICY_PRESETS, STRESS_SCENARIOS, type StressScenarioId } from "@/lib/scenarios";
 import { isTypingTarget } from "@/lib/hud";
 import { TWIN_DISTRICTS } from "@/lib/districts";
 import { TWIN_FLYIN_EVENT, TWIN_LOOKAT_EVENT, TWIN_ORBIT_EVENT } from "@/lib/twin-camera";
 import { AERIS_ESCAPE_EVENT, interpretHudKey } from "@/lib/hotkeys";
+import { dispatchDiagnosticsToggle } from "@/lib/runtime-diagnostics";
 import { BRIEFING_BEATS, dispatchBriefingBeat, dispatchBriefingStep } from "@/lib/presentation/beats";
 
 type PaletteItem = {
@@ -16,7 +17,7 @@ type PaletteItem = {
   group: string;
   label: string;
   hint?: string;
-  icon: "building" | "policy" | "layer" | "scenario" | "street" | "snapshot" | "district";
+  icon: "building" | "policy" | "layer" | "scenario" | "street" | "snapshot" | "district" | "diagnostics";
   run: () => void;
 };
 
@@ -204,6 +205,14 @@ export function CommandPalette() {
           void runParetoSolver();
         },
       },
+      {
+        id: "diagnostics",
+        group: "Ops",
+        label: "System health overlay",
+        hint: "Ctrl+Shift+D",
+        icon: "diagnostics",
+        run: () => dispatchDiagnosticsToggle(),
+      },
     ];
     const all = [
       ...briefingItems,
@@ -297,6 +306,8 @@ export function CommandPalette() {
                       ) : (
                         <Layers className="h-3.5 w-3.5 text-slate-400" />
                       )
+                    ) : item.icon === "diagnostics" ? (
+                      <Stethoscope className="h-3.5 w-3.5 text-cyan-200" />
                     ) : (
                       <Zap className="h-3.5 w-3.5 text-orange-300" />
                     )}
@@ -329,6 +340,11 @@ export function HudHotkeys() {
       if (action.type === "search") {
         event.preventDefault();
         s.setCommandPaletteOpen(!s.commandPaletteOpen);
+        return;
+      }
+      if (action.type === "diagnostics") {
+        event.preventDefault();
+        dispatchDiagnosticsToggle();
         return;
       }
       if (action.type === "dismiss") {

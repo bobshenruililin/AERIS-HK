@@ -13,7 +13,8 @@ export type HudKeyAction =
   | { type: "flyin" }
   | { type: "orbit" }
   | { type: "beat-next" }
-  | { type: "beat-prev" };
+  | { type: "beat-prev" }
+  | { type: "diagnostics" };
 
 export interface HudKeyContext {
   typing: boolean;
@@ -26,6 +27,7 @@ export interface HudKeyLike {
   metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
+  shiftKey?: boolean;
 }
 
 export function interpretHudKey(event: HudKeyLike, ctx: HudKeyContext): HudKeyAction | null {
@@ -33,6 +35,9 @@ export function interpretHudKey(event: HudKeyLike, ctx: HudKeyContext): HudKeyAc
   const code = event.code ?? "";
   if ((event.metaKey || event.ctrlKey) && key.toLowerCase() === "k") {
     return { type: "search" };
+  }
+  if ((event.metaKey || event.ctrlKey) && event.shiftKey && key.toLowerCase() === "d") {
+    return { type: "diagnostics" };
   }
   if (key === "Escape") {
     return { type: "dismiss" };

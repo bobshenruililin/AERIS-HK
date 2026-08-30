@@ -2,6 +2,22 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.17.0] — 2026-08-30
+
+### Added
+
+- Production Readiness Review artefact `PRR.md`: architecture (Mermaid), latency/FPS SLIs, degradation matrix (DuckDB / HKO / WebGPU), formal biophysical specification.
+- Scientific verification harness `lib/physics/verification.ts` + `lib/physics/__tests__/verification.ts` (`npm run test:verification`): Sol-Air collocated identity, ISO 7243 / VDI 3787-2 WBGT mix (operational UTCI analogue), ISO 7730 Fanger annex-style PMV–PPD, NSGA-II dominance / non-dominated sort, Monte Carlo admissions/beds PMF ∑ = 1.0.
+- System health overlay `components/dev/SystemHealthOverlay.tsx`: Ctrl+Shift+D / ⌘⇧D / command palette. Draw calls, GPU VRAM estimate, DuckDB ms, Arrow scrub ms, Web Worker count, heap Δ. Automated smoke test (Arrow query, Neon schema, GLSL compile) targeting < 1 s.
+- WebGL context-loss restore without reload (`lib/gpu/context-lifecycle.ts`): `preventDefault` on `webglcontextlost`, remount Deck.gl on `webglcontextrestored`. WebGPU `navigator.gpu` probe + `device.lost`.
+- Pre-allocated GPU particle buffers (`lib/gpu/particle-buffers.ts`) and CVI RGBA LUT (`lib/gpu/color-lut.ts`).
+
+### Changed
+
+- 60 FPS hot paths: in-place wind trails (`WIND_TRAIL_CAP = 6`), ambulance `pathLengthM` + `pointAlongPolylineInto`, TwinCanvas precomputed mesh topology + `projectEnuInto`, pooled Gagge interpolation, 20 Hz HUD hour vs rAF `hourClockRef`.
+- DuckDB failover traces gated by `NEXT_PUBLIC_AERIS_DEBUG=1`.
+- Removed unused `AERIS_CONCEPT_PROMPTS` and `usePlaybackClock`.
+
 ## [0.16.0] — 2026-08-30
 
 ### Added

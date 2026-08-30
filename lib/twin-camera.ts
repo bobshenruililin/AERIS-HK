@@ -52,13 +52,68 @@ export function zoomToDistanceM(zoom: number): number {
   return 720 * 2 ** (16.2 - zoom);
 }
 
-export function wgs84ToEnu(lon: number, lat: number, up = 0, origin = TWIN_ORIGIN): EnuPoint {
+const REL_SCRATCH: EnuPoint = { east: 0, north: 0, up: 0 };
+const TARGET_SCRATCH: EnuPoint = { east: 0, north: 0, up: 0 };
+const WORLD_UP: EnuPoint = { east: 0, north: 0, up: 1 };
+const BASIS_SCRATCH: CameraBasis = {
+  cam: { east: 0, north: 0, up: 0 },
+  right: { east: 0, north: 0, up: 0 },
+  up: { east: 0, north: 0, up: 0 },
+  forward: { east: 0, north: 0, up: 0 },
+};
+
+export function copyTwinView(out: TwinView, src: TwinView): TwinView {
+  out.targetEast = src.targetEast;
+  out.targetNorth = src.targetNorth;
+  out.targetUp = src.targetUp;
+  out.distance = src.distance;
+  out.bearingDeg = src.bearingDeg;
+  out.pitchDeg = src.pitchDeg;
+  out.fovDeg = src.fovDeg;
+  return out;
+}
+
+export function lerpViewInto(out: TwinView, a: TwinView, b: TwinView, t: number): TwinView {
+  const u = smoothstep(t);
+  out.targetEast = lerp(a.targetEast, b.targetEast, u);
+  out.targetNorth = lerp(a.targetNorth, b.targetNorth, u);
+  out.targetUp = lerp(a.targetUp, b.targetUp, u);
+  out.distance = lerp(a.distance, b.distance, u);
+  out.bearingDeg = lerp(a.bearingDeg, b.bearingDeg, u);
+  out.pitchDeg = lerp(a.pitchDeg, b.pitchDeg, u);
+  out.fovDeg = lerp(a.fovDeg, b.fovDeg, u);
+  return out;
+}
+
+export function orbitViewInto(out: TwinView, base: TwinView, elapsedMs: number, periodMs = 16000): TwinView {
+  const turns = elapsedMs / Math.max(1, periodMs);
+  const tau = turns * Math.PI * 2;
+  out.targetEast = base.targetEast;
+  out.targetNorth = base.targetNorth;
+  out.targetUp = base.targetUp;
+  out.bearingDeg = base.bearingDeg + turns * 360;
+  out.pitchDeg = clamp(base.pitchDeg + 5.5 * Math.sin(tau), 38, 72);
+  out.distance = base.distance * (1 + 0.08 * Math.sin(tau * 0.5));
+  out.fovDeg = base.fovDeg;
+  return out;
+}
+
+export function wgs84ToEnuInto(
+  out: EnuPoint,
+  lon: number,
+  lat: number,
+  up = 0,
+  origin = TWIN_ORIGIN,
+): EnuPoint {
   const { metersPerDegLat, metersPerDegLng } = metersPerDegree((lat + origin.lat) / 2);
-  return {
-    east: (lon - origin.lon) * metersPerDegLng,
-    north: (lat - origin.lat) * metersPerDegLat,
-    up,
-  };
+  out.east = (lon - origin.lon) * metersPerDegLng;
+  out.north = (lat - origin.lat) * metersPerDegLat;
+  out.up = up;
+  return out;
+}
+
+export function wgs84ToEnu(lon: number, lat: number, up = 0, origin = TWIN_ORIGIN): EnuPoint {
+  return wgs84ToEnuInto({ east: 0, north: 0, up: 0 }, lon, lat, up, origin);
 }
 
 export function viewFromMapState(view: {
@@ -105,31 +160,48 @@ export function smoothstep(t: number): number {
 }
 
 export function orbitView(base: TwinView, elapsedMs: number, periodMs = 16000): TwinView {
-  const turns = elapsedMs / Math.max(1, periodMs);
-  const tau = turns * Math.PI * 2;
-  return {
-    ...base,
-    bearingDeg: base.bearingDeg + turns * 360,
-    pitchDeg: clamp(base.pitchDeg + 5.5 * Math.sin(tau), 38, 72),
-    distance: base.distance * (1 + 0.08 * Math.sin(tau * 0.5)),
-  };
+  return orbitViewInto(
+    {
+      targetEast: 0,
+      targetNorth: 0,
+      targetUp: 0,
+      distance: 0,
+      bearingDeg: 0,
+      pitchDeg: 0,
+      fovDeg: 0,
+    },
+    base,
+    elapsedMs,
+    periodMs,
+  );
 }
 
 export function lerpView(a: TwinView, b: TwinView, t: number): TwinView {
-  const u = smoothstep(t);
-  return {
-    targetEast: lerp(a.targetEast, b.targetEast, u),
-    targetNorth: lerp(a.targetNorth, b.targetNorth, u),
-    targetUp: lerp(a.targetUp, b.targetUp, u),
-    distance: lerp(a.distance, b.distance, u),
-    bearingDeg: lerp(a.bearingDeg, b.bearingDeg, u),
-    pitchDeg: lerp(a.pitchDeg, b.pitchDeg, u),
-    fovDeg: lerp(a.fovDeg, b.fovDeg, u),
-  };
+  return lerpViewInto(
+    {
+      targetEast: 0,
+      targetNorth: 0,
+      targetUp: 0,
+      distance: 0,
+      bearingDeg: 0,
+      pitchDeg: 0,
+      fovDeg: 0,
+    },
+    a,
+    b,
+    t,
+  );
 }
 
 function hypot3(a: EnuPoint): number {
   return Math.hypot(a.east, a.north, a.up);
+}
+
+function setEnu(out: EnuPoint, east: number, north: number, up: number): EnuPoint {
+  out.east = east;
+  out.north = north;
+  out.up = up;
+  return out;
 }
 
 function scale(a: EnuPoint, s: number): EnuPoint {
@@ -161,35 +233,105 @@ function normalize(a: EnuPoint): EnuPoint {
   return scale(a, 1 / len);
 }
 
-export function cameraPosition(view: TwinView): EnuPoint {
+function crossInto(out: EnuPoint, a: EnuPoint, b: EnuPoint): EnuPoint {
+  return setEnu(
+    out,
+    a.north * b.up - a.up * b.north,
+    a.up * b.east - a.east * b.up,
+    a.east * b.north - a.north * b.east,
+  );
+}
+
+function normalizeInto(out: EnuPoint): EnuPoint {
+  const len = hypot3(out) || 1;
+  out.east /= len;
+  out.north /= len;
+  out.up /= len;
+  return out;
+}
+
+export function cameraPositionInto(out: EnuPoint, view: TwinView): EnuPoint {
   const pitch = (view.pitchDeg * Math.PI) / 180;
   const bearing = (view.bearingDeg * Math.PI) / 180;
   const horiz = view.distance * Math.sin(pitch);
   const vert = view.distance * Math.cos(pitch);
-  return {
-    east: view.targetEast - Math.sin(bearing) * horiz,
-    north: view.targetNorth - Math.cos(bearing) * horiz,
-    up: view.targetUp + vert,
-  };
+  return setEnu(
+    out,
+    view.targetEast - Math.sin(bearing) * horiz,
+    view.targetNorth - Math.cos(bearing) * horiz,
+    view.targetUp + vert,
+  );
+}
+
+export function cameraPosition(view: TwinView): EnuPoint {
+  return cameraPositionInto({ east: 0, north: 0, up: 0 }, view);
+}
+
+/** Mutates `out`. TwinCanvas rAF must pass a frame-local basis, never a shared global. */
+export function cameraBasisInto(out: CameraBasis, view: TwinView): CameraBasis {
+  cameraPositionInto(out.cam, view);
+  setEnu(TARGET_SCRATCH, view.targetEast, view.targetNorth, view.targetUp);
+  setEnu(
+    out.forward,
+    TARGET_SCRATCH.east - out.cam.east,
+    TARGET_SCRATCH.north - out.cam.north,
+    TARGET_SCRATCH.up - out.cam.up,
+  );
+  normalizeInto(out.forward);
+  crossInto(out.right, out.forward, WORLD_UP);
+  if (hypot3(out.right) < 1e-6) {
+    setEnu(out.right, 1, 0, 0);
+  } else {
+    normalizeInto(out.right);
+  }
+  crossInto(out.up, out.right, out.forward);
+  normalizeInto(out.up);
+  return out;
 }
 
 export function cameraBasis(view: TwinView): CameraBasis {
-  const cam = cameraPosition(view);
-  const target: EnuPoint = {
-    east: view.targetEast,
-    north: view.targetNorth,
-    up: view.targetUp,
-  };
-  const forward = normalize(sub(target, cam));
-  const worldUp: EnuPoint = { east: 0, north: 0, up: 1 };
-  let right = cross(forward, worldUp);
-  if (hypot3(right) < 1e-6) {
-    right = { east: 1, north: 0, up: 0 };
-  } else {
-    right = normalize(right);
+  return cameraBasisInto(
+    {
+      cam: { east: 0, north: 0, up: 0 },
+      right: { east: 0, north: 0, up: 0 },
+      up: { east: 0, north: 0, up: 0 },
+      forward: { east: 0, north: 0, up: 0 },
+    },
+    view,
+  );
+}
+
+export function projectEnuInto(
+  out: ProjectedPoint,
+  point: EnuPoint,
+  view: TwinView,
+  width: number,
+  height: number,
+  basis?: CameraBasis,
+): ProjectedPoint {
+  const frame = basis ?? cameraBasisInto(BASIS_SCRATCH, view);
+  REL_SCRATCH.east = point.east - frame.cam.east;
+  REL_SCRATCH.north = point.north - frame.cam.north;
+  REL_SCRATCH.up = point.up - frame.cam.up;
+  const cx = dot(REL_SCRATCH, frame.right);
+  const cy = dot(REL_SCRATCH, frame.up);
+  const cz = dot(REL_SCRATCH, frame.forward);
+  if (cz < 8) {
+    out.x = 0;
+    out.y = 0;
+    out.depth = cz;
+    out.visible = false;
+    return out;
   }
-  const up = normalize(cross(right, forward));
-  return { cam, right, up, forward };
+  const f = 1 / Math.tan(((view.fovDeg * Math.PI) / 180) / 2);
+  const aspect = Math.max(0.4, width / Math.max(1, height));
+  const ndcX = ((cx / cz) * f) / aspect;
+  const ndcY = (cy / cz) * f;
+  out.x = (ndcX * 0.5 + 0.5) * width;
+  out.y = (0.5 - ndcY * 0.5) * height;
+  out.depth = cz;
+  out.visible = Math.abs(ndcX) < 1.45 && Math.abs(ndcY) < 1.45;
+  return out;
 }
 
 export function projectEnu(
@@ -199,24 +341,7 @@ export function projectEnu(
   height: number,
   basis?: CameraBasis,
 ): ProjectedPoint {
-  const frame = basis ?? cameraBasis(view);
-  const rel = sub(point, frame.cam);
-  const cx = dot(rel, frame.right);
-  const cy = dot(rel, frame.up);
-  const cz = dot(rel, frame.forward);
-  if (cz < 8) {
-    return { x: 0, y: 0, depth: cz, visible: false };
-  }
-  const f = 1 / Math.tan(((view.fovDeg * Math.PI) / 180) / 2);
-  const aspect = Math.max(0.4, width / Math.max(1, height));
-  const ndcX = ((cx / cz) * f) / aspect;
-  const ndcY = (cy / cz) * f;
-  return {
-    x: (ndcX * 0.5 + 0.5) * width,
-    y: (0.5 - ndcY * 0.5) * height,
-    depth: cz,
-    visible: Math.abs(ndcX) < 1.45 && Math.abs(ndcY) < 1.45,
-  };
+  return projectEnuInto({ x: 0, y: 0, depth: 0, visible: false }, point, view, width, height, basis);
 }
 
 export function pickNearestId(

@@ -18,6 +18,8 @@ describe("Monte Carlo policy stress-tester", () => {
     assert.ok(result.admissions.p50 <= result.admissions.p975);
     assert.ok(result.bedDeficitPct.p025 <= result.bedDeficitPct.p975);
     assert.equal(result.violinAdmissions.length, 32);
+    const pmf = result.admissionsPmf.reduce((s, v) => s + v, 0);
+    assert.ok(Math.abs(pmf - 1) < 1e-12, `admissions PMF ${pmf}`);
     assert.ok(ms < 400, `MC too slow: ${ms} ms`);
   });
 

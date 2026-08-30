@@ -48,6 +48,7 @@ translate equal to the first vertex’s HK80 easting/northing.
 - GPU Deck.gl / MapLibre mounts only with `?gpu=1` **and** a healthy WebGL2 probe
   (`lib/runtime-guards.ts` `probeHealthyWebGL2`). Failures, `webglcontextlost`, and
   Deck/MapLibre `onError` demote to the software ENU twin (`data-testid="gpu-failover"`).
+  `webglcontextlost` calls `preventDefault`; `webglcontextrestored` remounts Deck.gl (`lib/gpu/context-lifecycle.ts`).
   Mapbox GL JS is never constructed; MapLibre is the Mapbox-compatible basemap.
 - DuckDB instantiates only when `canUseDuckDbWasm()` (window + Worker +
   `WebAssembly.validate`). Otherwise columnar/Arrow fallback — no throw.
@@ -456,6 +457,37 @@ One-click PDF (`%PDF-1.4`, Helvetica, JPEG XObject of `[data-testid=twin-canvas]
 | Audio | `lib/audio/sonification.ts` never touches `window` except inside functions. |
 | Defaults | Beat tables and `OPTIMAL_COUNTERFACTUAL_POLICY` are compile-time literals. |
 | Tests | `npm run test:presentation` |
+
+## 15. Delivery ledger — Production Readiness Review (0.17.0)
+
+Requirement-by-requirement evidence. Formal write-up: `PRR.md`. Gates: `npx tsc --noEmit`, `npm run test:verification`, `npm run build`.
+
+### 15.1 Zero-allocation 60 FPS
+
+| Path | Evidence |
+| --- | --- |
+| Wind | `lib/wind-field.ts` mutates `WindParticle[]` and a 6-point trail ring. |
+| Ambulance | `pathLengthM` + `pointAlongPolylineInto`; same array returned. |
+| TwinCanvas | `lib/twin-draw.ts` precomputed faces; `cameraBasisInto` / `projectEnuInto` / `HourInstanceCursor`. |
+| Physics tick | Pooled `BuildingHourState`; HUD hour at 20 Hz; `hourClockRef` on rAF. |
+| Deck.gl | `lib/gpu/particle-buffers.ts` binary `getPosition` (`Float32Array`). |
+
+### 15.2 GPU lifecycle
+
+`lib/gpu/context-lifecycle.ts`: `preventDefault` on lost, remount on restored, WebGPU adapter probe and `device.lost`. Overlay reports flags.
+
+### 15.3 Verification harness
+
+`lib/physics/__tests__/verification.ts`: Sol-Air night identity, ISO 7243/VDI 3787-2 mix, ISO 7730 PPD logistic, NSGA-II `dominates` + front, Monte Carlo PMF ∑=1.
+
+### 15.4 Health overlay
+
+`components/dev/SystemHealthOverlay.tsx`, `data-testid="system-health-overlay"`. Ctrl+Shift+D in `lib/hotkeys.ts` before the modifier guard. Smoke: Arrow + Neon + shader, < 1 s budget.
+
+### 15.5 Hygiene
+
+DuckDB `console.warn` behind `aerisDebugEnabled()`. Dead `AERIS_CONCEPT_PROMPTS` / `usePlaybackClock` removed. No `any` introduced.
+
 
 
 

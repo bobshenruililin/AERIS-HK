@@ -188,24 +188,35 @@ export interface EnuShadowPoint {
  * Intersect a roof/wall vertex with the ground plane along the incoming
  * solar travel vector (Deck.gl z-up, same convention as `sunDirectionVec`).
  */
-export function castGroundShadow(
+export function castGroundShadowInto(
+  out: EnuShadowPoint,
   point: EnuShadowPoint,
   sunTravel: [number, number, number],
 ): EnuShadowPoint {
   const sz = sunTravel[2];
   if (sz >= -1e-4 || point.up <= 0.05) {
-    return { east: point.east, north: point.north, up: 0 };
+    out.east = point.east;
+    out.north = point.north;
+    out.up = 0;
+    return out;
   }
   const t = -point.up / sz;
-  return {
-    east: point.east + t * sunTravel[0],
-    north: point.north + t * sunTravel[1],
-    up: 0.05,
-  };
+  out.east = point.east + t * sunTravel[0];
+  out.north = point.north + t * sunTravel[1];
+  out.up = 0.05;
+  return out;
+}
+
+export function castGroundShadow(
+  point: EnuShadowPoint,
+  sunTravel: [number, number, number],
+): EnuShadowPoint {
+  return castGroundShadowInto({ east: 0, north: 0, up: 0 }, point, sunTravel);
 }
 
 /** Apparent sun position in local ENU metres from a look-at. Azimuth clockwise from north. */
-export function sunEnuFromLookAt(
+export function sunEnuFromLookAtInto(
+  out: EnuShadowPoint,
   originEast: number,
   originNorth: number,
   elevationDeg: number,
@@ -215,11 +226,20 @@ export function sunEnuFromLookAt(
   const el = (elevationDeg * Math.PI) / 180;
   const az = (azimuthDeg * Math.PI) / 180;
   const horiz = Math.cos(el) * distanceM;
-  return {
-    east: originEast + Math.sin(az) * horiz,
-    north: originNorth + Math.cos(az) * horiz,
-    up: Math.max(28, Math.sin(el) * distanceM),
-  };
+  out.east = originEast + Math.sin(az) * horiz;
+  out.north = originNorth + Math.cos(az) * horiz;
+  out.up = Math.max(28, Math.sin(el) * distanceM);
+  return out;
+}
+
+export function sunEnuFromLookAt(
+  originEast: number,
+  originNorth: number,
+  elevationDeg: number,
+  azimuthDeg: number,
+  distanceM = 2400,
+): EnuShadowPoint {
+  return sunEnuFromLookAtInto({ east: 0, north: 0, up: 0 }, originEast, originNorth, elevationDeg, azimuthDeg, distanceM);
 }
 
 /** Roof still sees the sky; only the beam is cloud-scaled. */

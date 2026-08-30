@@ -109,6 +109,12 @@ export function encodeHourColumnsIpc(store: HourColumnStore): Uint8Array {
   return tableToIPC(table, "file");
 }
 
+const DIST_SUM_SCRATCH = [
+  { cvi: 0, wbgt: 0, ta: 0, n: 0 },
+  { cvi: 0, wbgt: 0, ta: 0, n: 0 },
+];
+const TOP_SCRATCH: Array<{ i: number; cvi: number }> = [];
+
 export function queryHourColumns(
   store: HourColumnStore,
   hour: number,
@@ -117,25 +123,41 @@ export function queryHourColumns(
   const started = performance.now();
   const view = hourColumnView(store, hour);
   const h = Math.round(hour) % 24;
-  const distSum = [
-    { cvi: 0, wbgt: 0, ta: 0, n: 0 },
-    { cvi: 0, wbgt: 0, ta: 0, n: 0 },
-  ];
-  const top: Array<{ i: number; cvi: number }> = [];
+  DIST_SUM_SCRATCH[0].cvi = 0;
+  DIST_SUM_SCRATCH[0].wbgt = 0;
+  DIST_SUM_SCRATCH[0].ta = 0;
+  DIST_SUM_SCRATCH[0].n = 0;
+  DIST_SUM_SCRATCH[1].cvi = 0;
+  DIST_SUM_SCRATCH[1].wbgt = 0;
+  DIST_SUM_SCRATCH[1].ta = 0;
+  DIST_SUM_SCRATCH[1].n = 0;
+  TOP_SCRATCH.length = Math.max(TOP_SCRATCH.length, 0);
+  let topN = 0;
   const { start, count } = view;
   for (let j = 0; j < count; j += 1) {
     const i = start + j;
     const d = store.district[i];
-    distSum[d].cvi += store.cvi[i];
-    distSum[d].wbgt += store.microWbgt[i];
-    distSum[d].ta += store.indoorTa[i];
-    distSum[d].n += 1;
-    if (store.cvi[i] >= minCvi) top.push({ i, cvi: store.cvi[i] });
+    DIST_SUM_SCRATCH[d].cvi += store.cvi[i];
+    DIST_SUM_SCRATCH[d].wbgt += store.microWbgt[i];
+    DIST_SUM_SCRATCH[d].ta += store.indoorTa[i];
+    DIST_SUM_SCRATCH[d].n += 1;
+    if (store.cvi[i] >= minCvi) {
+      let slot = TOP_SCRATCH[topN];
+      if (!slot) {
+        slot = { i, cvi: store.cvi[i] };
+        TOP_SCRATCH[topN] = slot;
+      } else {
+        slot.i = i;
+        slot.cvi = store.cvi[i];
+      }
+      topN += 1;
+    }
   }
-  top.sort((a, b) => b.cvi - a.cvi);
+  TOP_SCRATCH.length = topN;
+  TOP_SCRATCH.sort((a, b) => b.cvi - a.cvi);
   const districtHourly: DistrictHourAggregate[] = [];
   for (let d = 0; d < 2; d += 1) {
-    const b = distSum[d];
+    const b = DIST_SUM_SCRATCH[d];
     if (b.n === 0) continue;
     districtHourly.push({
       district: DISTRICT_NAME[d],
@@ -146,7 +168,7 @@ export function queryHourColumns(
       buildingCount: b.n,
     });
   }
-  const topCritical: CriticalBuildingRow[] = top.slice(0, 10).map((row) => {
+  const topCritical: CriticalBuildingRow[] = TOP_SCRATCH.slice(0, 10).map((row) => {
     const i = row.i;
     return {
       buildingId: store.buildingId[i],

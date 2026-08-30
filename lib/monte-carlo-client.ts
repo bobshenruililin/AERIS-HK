@@ -3,6 +3,7 @@
 import type { MonteCarloInput, MonteCarloResult } from "./monte-carlo";
 import { runMonteCarlo } from "./monte-carlo";
 import { canUseMonteCarloWorker } from "./runtime-guards";
+import { registerAerisWorker, unregisterAerisWorker } from "./runtime-diagnostics";
 
 export function runMonteCarloAsync(payload: MonteCarloInput): Promise<MonteCarloResult> {
   if (!canUseMonteCarloWorker()) {
@@ -17,20 +18,24 @@ export function runMonteCarloAsync(payload: MonteCarloInput): Promise<MonteCarlo
     };
     try {
       const worker = new Worker(new URL("./monte-carlo-worker.ts", import.meta.url));
+      registerAerisWorker("monte-carlo");
       const requestId = Date.now();
       const timer = window.setTimeout(() => {
         worker.terminate();
+        unregisterAerisWorker("monte-carlo");
         finish({ ...runMonteCarlo(payload), engine: "sync-js" });
       }, 12_000);
       worker.onmessage = (event: MessageEvent<{ type?: string; requestId?: number; result?: MonteCarloResult }>) => {
         if (event.data?.type !== "result" || event.data.requestId !== requestId || !event.data.result) return;
         window.clearTimeout(timer);
         worker.terminate();
+        unregisterAerisWorker("monte-carlo");
         finish(event.data.result);
       };
       worker.onerror = () => {
         window.clearTimeout(timer);
         worker.terminate();
+        unregisterAerisWorker("monte-carlo");
         finish({ ...runMonteCarlo(payload), engine: "sync-js" });
       };
       worker.postMessage({ type: "run", requestId, payload });

@@ -138,7 +138,38 @@ export function packInstanceExtrusions(
   };
 }
 
-/** Zero-copy hour slice — callers must not mutate the views. */
+/**
+ * Cursor over hour-major instance buffers. Mutate in place on the 60 FPS path
+ * so a diurnal scrub never allocates TypedArray views.
+ */
+export interface HourInstanceCursor {
+  count: number;
+  colorOffset: number;
+  elevOffset: number;
+  positions: Float32Array;
+  colors: Uint8Array;
+  elevations: Float32Array;
+  acWatts: Float32Array;
+}
+
+export function fillHourInstanceCursor(
+  out: HourInstanceCursor,
+  pack: InstancePack,
+  hour: number,
+  lod: LodLevel,
+): HourInstanceCursor {
+  const h = Math.floor(wrapHour(hour)) % 24;
+  out.count = visibleInstanceCount(lod, pack.count, pack.parentCount);
+  out.colorOffset = h * pack.count * 4;
+  out.elevOffset = h * pack.count;
+  out.positions = pack.instancePositions;
+  out.colors = pack.instanceColors;
+  out.elevations = pack.instanceElevations;
+  out.acWatts = pack.instanceAcWatts;
+  return out;
+}
+
+/** Zero-copy hour slice for Deck.gl binary attributes. Callers must not mutate the views. */
 export function sliceHourInstances(pack: InstancePack, hour: number, lod: LodLevel): HourInstanceSlice {
   const h = Math.floor(wrapHour(hour)) % 24;
   const count = visibleInstanceCount(lod, pack.count, pack.parentCount);
@@ -153,7 +184,24 @@ export function sliceHourInstances(pack: InstancePack, hour: number, lod: LodLev
   };
 }
 
-export function packedInstanceColor(slice: HourInstanceSlice, index: number): RGBA {
+export function packedInstanceColorInto(out: RGBA, slice: HourInstanceSlice, index: number): RGBA {
   const o = index * 4;
-  return [slice.instanceColors[o], slice.instanceColors[o + 1], slice.instanceColors[o + 2], slice.instanceColors[o + 3]];
+  out[0] = slice.instanceColors[o];
+  out[1] = slice.instanceColors[o + 1];
+  out[2] = slice.instanceColors[o + 2];
+  out[3] = slice.instanceColors[o + 3];
+  return out;
+}
+
+export function packedCursorColorInto(out: RGBA, cursor: HourInstanceCursor, index: number): RGBA {
+  const o = cursor.colorOffset + index * 4;
+  out[0] = cursor.colors[o];
+  out[1] = cursor.colors[o + 1];
+  out[2] = cursor.colors[o + 2];
+  out[3] = cursor.colors[o + 3];
+  return out;
+}
+
+export function packedInstanceColor(slice: HourInstanceSlice, index: number): RGBA {
+  return packedInstanceColorInto([0, 0, 0, 0], slice, index);
 }

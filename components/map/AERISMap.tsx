@@ -26,7 +26,7 @@ import {
 } from "@/lib/constants";
 import { cviColor } from "@/lib/epidemiology-engine";
 import { HOSPITALS } from "@/lib/hospitals";
-import { advectWindParticles, createWindParticles, windStreaksFromParticles, type WindParticle } from "@/lib/wind-field";
+import { advectWindParticles, createWindParticles, type WindParticle } from "@/lib/wind-field";
 import type { BuildingFeature, BuildingFeatureCollection, BuildingProperties, HospitalCode } from "@/lib/types";
 import { buildingCentroid } from "@/lib/spatial-data";
 import { streetSpinesFromBuildings } from "@/lib/streets";
@@ -51,6 +51,12 @@ import {
   type ArterialStroke,
 } from "@/lib/hospital-triage";
 import { notifyGpuFailed } from "@/lib/runtime-guards";
+import {
+  createParticleGpuBuffers,
+  deckBinaryPoints,
+  packAmbulanceParticles,
+  packWindParticles,
+} from "@/lib/gpu/particle-buffers";
 
 interface PlumeRow {
   id: string;
@@ -92,12 +98,19 @@ export default function AERISMap() {
   } = useSimulation();
   const [viewState, setViewState] = useState<MapViewState>({ ...HARBOUR_APPROACH_VIEW });
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
-  const [particles, setParticles] = useState<WindParticle[]>(particlesRef.current);
   const ambulanceRef = useRef<AmbulanceParticle[]>([]);
-  const [ambulances, setAmbulances] = useState<AmbulanceParticle[]>([]);
+  const windBufRef = useRef(createParticleGpuBuffers(920));
+  const ambBufRef = useRef(createParticleGpuBuffers(64));
+  const [particleTick, setParticleTick] = useState(0);
   const [gpuTime, setGpuTime] = useState(0);
   const userMoved = useRef(false);
   const planKey = planFingerprint(snapshot.triage);
+  const hourRef = useRef(hour);
+  hourRef.current = hour;
+  const buildingsRef = useRef(buildings);
+  buildingsRef.current = buildings;
+  const forcingRef = useRef(forcing);
+  forcingRef.current = forcing;
 
   const targeted = useMemo(() => new Set(policy.coolRoofTargetIds), [policy.coolRoofTargetIds]);
 
@@ -175,7 +188,8 @@ export default function AERISMap() {
 
   useEffect(() => {
     ambulanceRef.current = createAmbulanceParticles(snapshot.triage);
-    setAmbulances(ambulanceRef.current);
+    packAmbulanceParticles(ambulanceRef.current, ambBufRef.current);
+    setParticleTick((n) => n + 1);
   }, [planKey, snapshot.triage]);
 
   const lodRef = useRef(lod);
@@ -192,14 +206,21 @@ export default function AERISMap() {
         raf = requestAnimationFrame(loop);
         return;
       }
-      particlesRef.current = advectWindParticles(particlesRef.current, dt, hour, buildings, forcing);
+      advectWindParticles(
+        particlesRef.current,
+        dt,
+        hourRef.current,
+        buildingsRef.current,
+        forcingRef.current,
+      );
       if (ambulanceRef.current.length > 0) {
-        ambulanceRef.current = advectAmbulanceParticles(ambulanceRef.current, dt);
+        advectAmbulanceParticles(ambulanceRef.current, dt);
       }
       emit += dt;
       if (emit >= 1 / 8) {
-        setParticles(particlesRef.current);
-        setAmbulances(ambulanceRef.current);
+        packWindParticles(particlesRef.current, windBufRef.current);
+        packAmbulanceParticles(ambulanceRef.current, ambBufRef.current);
+        setParticleTick((n) => n + 1);
         setGpuTime(now / 1000);
         emit = 0;
       }
@@ -207,7 +228,7 @@ export default function AERISMap() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [hour, buildings, forcing]);
+  }, []);
 
   const lighting = useMemo(() => {
     const day = isDaylight(hour);
@@ -278,7 +299,6 @@ export default function AERISMap() {
     });
   }, [buildings, targeted, focusedHospital, centroidById]);
 
-  const streaks = useMemo(() => windStreaksFromParticles(particles), [particles]);
   const transferStrokes = useMemo(() => arterialStrokes(snapshot.triage), [snapshot.triage]);
   const highlightSet = useMemo(() => new Set(copilot.highlightIds), [copilot.highlightIds]);
   const copilotDiffCollection = useMemo<BuildingFeatureCollection>(() => {
@@ -536,45 +556,41 @@ export default function AERISMap() {
 
   const windLayers = useMemo(() => {
     if (lod === 0 || !hudLayers.windVectors) return [];
+    const windData = deckBinaryPoints(windBufRef.current);
     return [
       new PathLayer({
         id: "venturi-streamlines",
-        data: lod === 2 ? streaks : [],
-        getPath: (d: { path: [number, number][] }) => d.path,
-        getColor: (d: { stalled: boolean; venturi: number; alpha: number }) =>
+        data: lod === 2 ? particlesRef.current : [],
+        getPath: (d: WindParticle) => d.trail,
+        getColor: (d: WindParticle) =>
           d.stalled
-            ? [148, 163, 184, Math.round(90 * d.alpha)]
+            ? [148, 163, 184, Math.round(90 * Math.max(0.08, 1 - d.age / d.maxAge))]
             : d.venturi > 1.25
-              ? [251, 191, 36, Math.round(210 * d.alpha)]
-              : [34, 211, 238, Math.round(180 * d.alpha)],
-        getWidth: (d: { stalled: boolean; venturi: number }) =>
+              ? [251, 191, 36, Math.round(210 * Math.max(0.08, 1 - d.age / d.maxAge))]
+              : [34, 211, 238, Math.round(180 * Math.max(0.08, 1 - d.age / d.maxAge))],
+        getWidth: (d: WindParticle) =>
           d.stalled ? 3 : 4 + 6 * Math.min(1.5, Math.max(0, d.venturi - 1)),
         widthUnits: "meters",
         capRounded: true,
         jointRounded: true,
         extensions: [venturiExtension],
         venturiTime: gpuTime,
-        updateTriggers: { getColor: gpuTime, getWidth: gpuTime },
+        updateTriggers: { getColor: particleTick, getWidth: particleTick, getPath: particleTick },
       } as ConstructorParameters<typeof PathLayer>[0]),
-      new ScatterplotLayer<WindParticle>({
+      new ScatterplotLayer({
         id: "canyon-wind-particles",
-        data: particles,
-        getPosition: (d) => [d.lon, d.lat],
-        getRadius: (d) => 1.4 + d.speed * 0.35,
+        data: windData,
         radiusUnits: "meters",
         radiusMinPixels: 1.2,
         radiusMaxPixels: 5,
-        getFillColor: (d) => {
-          const fade = Math.max(50, 230 * (1 - d.age / d.maxAge));
-          if (d.stalled) return [148, 163, 184, fade * 0.55];
-          return d.venturi > 1.25 ? [251, 191, 36, fade] : [34, 211, 238, fade];
-        },
+        updateTriggers: { getPosition: particleTick, getFillColor: particleTick, getRadius: particleTick },
       }),
     ];
-  }, [lod, hudLayers.windVectors, streaks, particles, gpuTime, venturiExtension]);
+  }, [lod, hudLayers.windVectors, particleTick, gpuTime, venturiExtension]);
 
   const ambulanceLayers = useMemo(() => {
     if (lod === 0 || transferStrokes.length === 0) return [];
+    const ambData = deckBinaryPoints(ambBufRef.current);
     return [
       new PathLayer<ArterialStroke>({
         id: "ambulance-arterials",
@@ -587,22 +603,19 @@ export default function AERISMap() {
         capRounded: true,
         jointRounded: true,
       }),
-      new ScatterplotLayer<AmbulanceParticle>({
+      new ScatterplotLayer({
         id: "ambulance-particles",
-        data: ambulances,
-        getPosition: (d) => [d.lon, d.lat],
-        getRadius: 9,
+        data: ambData,
         radiusUnits: "meters",
         radiusMinPixels: 3,
         radiusMaxPixels: 8,
-        getFillColor: (d) =>
-          d.arterial === "nathan-road" ? [254, 215, 170, 240] : [254, 202, 202, 240],
         stroked: true,
         getLineColor: [15, 23, 42, 220],
         lineWidthMinPixels: 1,
+        updateTriggers: { getPosition: particleTick, getFillColor: particleTick },
       }),
     ];
-  }, [lod, transferStrokes, ambulances]);
+  }, [lod, transferStrokes, particleTick]);
 
   const layers = useMemo(
     () => [...cityLayers, ...windLayers, ...ambulanceLayers],

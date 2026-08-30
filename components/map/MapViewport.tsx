@@ -6,6 +6,14 @@ import { TwinCanvas } from "./TwinCanvas";
 import { CinematicPlate } from "@/components/assets/CinematicPlate";
 import { ErrorBoundary } from "@/components/system/ErrorBoundary";
 import { AERIS_GPU_FAILED_EVENT, probeHealthyWebGL2 } from "@/lib/runtime-guards";
+import {
+  AERIS_GPU_RESTORED_EVENT,
+  handleWebGlContextLost,
+  handleWebGlContextRestored,
+  probeWebGPU,
+  webgpuSupportedSync,
+} from "@/lib/gpu/context-lifecycle";
+import { recordGpuFlags } from "@/lib/runtime-diagnostics";
 
 const AERISMap = dynamic(() => import("./AERISMap"), {
   ssr: false,
@@ -19,14 +27,22 @@ type GpuState = "software" | "promoted" | "failover";
  * asked (?gpu=1) *and* a real non-software WebGL2 context can clear and read
  * back a pixel. Mapbox GL JS is never instantiated; MapLibre is the basemap.
  * TwinCanvas (Canvas2D ENU) is always the picture underneath.
+ *
+ * webglcontextlost calls preventDefault so webglcontextrestored can remount
+ * Deck.gl without a page reload.
  */
 export function MapViewport() {
   const [gpu, setGpu] = useState<GpuState>("software");
   const [askedGpu, setAskedGpu] = useState(false);
+  const [gpuEpoch, setGpuEpoch] = useState(0);
 
   useEffect(() => {
     const asked = new URLSearchParams(window.location.search).get("gpu") === "1";
     setAskedGpu(asked);
+    recordGpuFlags({ webgl2: probeHealthyWebGL2(), webgpu: webgpuSupportedSync(), contextLost: false });
+    void probeWebGPU().then((probe) => {
+      recordGpuFlags({ webgpu: probe.available && probe.adapter, contextLost: probe.lost });
+    });
     if (!asked) {
       setGpu("software");
       return;
@@ -39,12 +55,36 @@ export function MapViewport() {
   }, []);
 
   useEffect(() => {
-    const demote = () => setGpu((s) => (s === "promoted" ? "failover" : s));
+    const demote = () => {
+      setGpu((s) => (s === "promoted" ? "failover" : s));
+      recordGpuFlags({ contextLost: true, webgl2: false });
+    };
+    const onLost = (event: Event) => {
+      handleWebGlContextLost(event);
+      demote();
+    };
+    const onRestored = () => {
+      handleWebGlContextRestored();
+      const asked = new URLSearchParams(window.location.search).get("gpu") === "1";
+      if (!asked) return;
+      if (!probeHealthyWebGL2()) {
+        setGpu("failover");
+        recordGpuFlags({ webgl2: false, contextLost: true });
+        return;
+      }
+      recordGpuFlags({ webgl2: true, contextLost: false });
+      setGpu("promoted");
+      setGpuEpoch((n) => n + 1);
+    };
     window.addEventListener(AERIS_GPU_FAILED_EVENT, demote);
-    window.addEventListener("webglcontextlost", demote);
+    window.addEventListener("webglcontextlost", onLost);
+    window.addEventListener("webglcontextrestored", onRestored);
+    window.addEventListener(AERIS_GPU_RESTORED_EVENT, onRestored);
     return () => {
       window.removeEventListener(AERIS_GPU_FAILED_EVENT, demote);
-      window.removeEventListener("webglcontextlost", demote);
+      window.removeEventListener("webglcontextlost", onLost);
+      window.removeEventListener("webglcontextrestored", onRestored);
+      window.removeEventListener(AERIS_GPU_RESTORED_EVENT, onRestored);
     };
   }, []);
 
@@ -60,7 +100,7 @@ export function MapViewport() {
           onError={() => setGpu("failover")}
         >
           <div className="absolute inset-0" data-testid="gpu-twin">
-            <AERISMap />
+            <AERISMap key={gpuEpoch} />
           </div>
         </ErrorBoundary>
       ) : null}

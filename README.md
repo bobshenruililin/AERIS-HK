@@ -119,7 +119,7 @@ Interface density is solved with aerospace / VisionOS glass — **not** by remov
 - **Control Dock** (bottom pill): layers, playbar, Jul 2022 / Typhoon / Blackout, Share `?sim=`.
 - **Pinned ENU telemetry** on building pick; inspector tabs Thermal / Demographic / A&E Surge (Cat 1–3).
 - **Cinematic orbital camera** on TwinCanvas (Control Dock → Orbit).
-- **Keyboard**: `1–4` dock presets, `Space` play/pause, `←` / `→` cinematic briefing beats, `⌘K` / `Ctrl+K` palette, `Esc` dismisses palette then pinned inspector HUDs. Formula `ƒ` tips on every biophysical spark (UTCI/WBGT, Fanger PMV, DLNM-style RR).
+- **Keyboard**: `1–4` dock presets, `Space` play/pause, `←` / `→` cinematic briefing beats, `⌘K` / `Ctrl+K` palette, `Ctrl+Shift+D` system health overlay, `Esc` dismisses palette then pinned inspector HUDs. Formula `ƒ` tips on every biophysical spark (UTCI/WBGT, Fanger PMV, DLNM-style RR).
 - **Executive Presentation Suite**: `Play briefing` opens the cinematic director (camera + diurnal keyframes, Web Audio heat soundscape, one-click A4 PDF+PNG). Existing DH/WHO `ExportReport` and `ExecutiveBriefing` remain.
 - **Spatial Policy Copilot**: `Ask copilot` on the Control Dock / ⌘K. Natural language plans four Zod-validated tools (`run_counterfactual`, `focus_hotspot`, `query_hospital_capacity`, `compare_scenarios`) via OpenAI, Anthropic, Neon AI Gateway, or the offline intent parser. The twin flies to the canyon, scrubs to peak thermal hour, and paints green/red CVI delta polygons. Every sentence cites the live engine (`[Sol-Air Equation: Eq. 3]`, DuckDB footprint counts, Neon run id).
 
@@ -160,7 +160,8 @@ npm run test:mc && npm run test:scenarios && npm run test:bio
 npm run test:h3 && npm run test:db && npm run test:spatial
 npm run test:instance && npm run test:arrow && npm run test:cache
 npm run test:triage && npm run test:briefing && npm run test:hardening && npm run test:agent
-npm run test:pareto && npm run test:telemetry
+npm run test:pareto && npm run test:telemetry && npm run test:presentation
+npm run test:verification
 npm run build
 ```
 
@@ -178,6 +179,7 @@ npm run build
 | `components/` | TwinCanvas, Deck overlay, HUD, dock, `components/copilot/PolicyAgent.tsx` |
 | `scripts/` | Seed, neon ping, DuckDB bench |
 | `drizzle/` | SQL migrations |
+| `PRR.md` | Production Readiness Review: SLIs, degradation matrix, math spec |
 | `PERFORMANCE_AUDIT.md` | Before/after Deck.gl, Arrow, Neon benches |
 | `SYSTEM_INTELLIGENCE.md` | Formulas, CRS, SSR, measured benches |
 | `CHANGELOG.md` / `ROADMAP.md` | Leaves and remaining work |
