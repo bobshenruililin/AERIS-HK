@@ -9,6 +9,7 @@ import {
   jpegFromDataUrl,
   modelFromTwin,
   rasterizeA4Png,
+  zipStore,
 } from "@/lib/presentation/a4-brief";
 import type { BriefingBeat } from "@/lib/presentation/beats";
 import { runMonteCarlo } from "@/lib/monte-carlo";
@@ -64,8 +65,11 @@ export function VectorBriefingExport({ beat }: { beat: BriefingBeat }) {
       });
       const pdf = buildA4Pdf(model);
       const png = rasterizeA4Png(model, canvas);
-      downloadBytes(pdf, "application/pdf", `aeris-hk-briefing-beat-${beat.index + 1}.pdf`);
-      downloadBytes(png, "image/png", `aeris-hk-briefing-beat-${beat.index + 1}.png`);
+      const zip = zipStore([
+        { name: `aeris-hk-briefing-beat-${beat.index + 1}.pdf`, data: pdf },
+        { name: `aeris-hk-briefing-beat-${beat.index + 1}.png`, data: png },
+      ]);
+      downloadBytes(zip, "application/zip", `aeris-hk-briefing-beat-${beat.index + 1}.zip`);
       setStatus(`Exported A4 PDF + PNG (${pdf.byteLength} B · ${png.byteLength} B)`);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Export failed");

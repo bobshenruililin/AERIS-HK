@@ -330,8 +330,100 @@ export function downloadBytes(bytes: Uint8Array, mime: string, filename: string)
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function crc32(bytes: Uint8Array): number {
+  let c = ~0 >>> 0;
+  for (let i = 0; i < bytes.length; i += 1) {
+    c ^= bytes[i]!;
+    for (let b = 0; b < 8; b += 1) {
+      c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+  }
+  return (~c) >>> 0;
+}
+
+function u16(n: number): Uint8Array {
+  const o = new Uint8Array(2);
+  o[0] = n & 0xff;
+  o[1] = (n >>> 8) & 0xff;
+  return o;
+}
+
+function u32(n: number): Uint8Array {
+  const o = new Uint8Array(4);
+  o[0] = n & 0xff;
+  o[1] = (n >>> 8) & 0xff;
+  o[2] = (n >>> 16) & 0xff;
+  o[3] = (n >>> 24) & 0xff;
+  return o;
+}
+
+/** Uncompressed ZIP so one click yields both the PDF and PNG without Chrome's second-download block. */
+export function zipStore(files: Array<{ name: string; data: Uint8Array }>): Uint8Array {
+  const locals: Uint8Array[] = [];
+  const centrals: Uint8Array[] = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = new TextEncoder().encode(file.name);
+    const crc = crc32(file.data);
+    const header = concatBytes([
+      new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(file.data.byteLength),
+      u32(file.data.byteLength),
+      u16(name.byteLength),
+      u16(0),
+      name,
+      file.data,
+    ]);
+    locals.push(header);
+    centrals.push(
+      concatBytes([
+        new Uint8Array([0x50, 0x4b, 0x01, 0x02]),
+        u16(20),
+        u16(20),
+        u16(0),
+        u16(0),
+        u16(0),
+        u16(0),
+        u32(crc),
+        u32(file.data.byteLength),
+        u32(file.data.byteLength),
+        u16(name.byteLength),
+        u16(0),
+        u16(0),
+        u16(0),
+        u16(0),
+        u32(0),
+        u32(offset),
+        name,
+      ]),
+    );
+    offset += header.byteLength;
+  }
+  const central = concatBytes(centrals);
+  const end = concatBytes([
+    new Uint8Array([0x50, 0x4b, 0x05, 0x06]),
+    u16(0),
+    u16(0),
+    u16(files.length),
+    u16(files.length),
+    u32(central.byteLength),
+    u32(offset),
+    u16(0),
+  ]);
+  return concatBytes([...locals, central, end]);
 }
 
 /** Raster A4 sheet (1240×1754) for PNG export. Map inset is optional. */

@@ -10,7 +10,7 @@ import {
   lerpHourForward,
   pickFukWaTrapBuilding,
 } from "../lib/presentation/beats";
-import { buildA4Pdf, jpegDimensions, modelFromTwin } from "../lib/presentation/a4-brief";
+import { buildA4Pdf, jpegDimensions, modelFromTwin, zipStore } from "../lib/presentation/a4-brief";
 import { droneFrequencyHz, droneGain, SOL_AIR_TICK_C } from "../lib/audio/sonification";
 import { roofAbsorbedShortwaveWm2, solAirTempC, SOL_AIR_CRITICAL_C, SOL_AIR_HO_WM2K } from "../lib/solar";
 import { interpretHudKey } from "../lib/hotkeys";
@@ -128,6 +128,14 @@ describe("A4 vector briefing", () => {
     assert.match(text, /KWH/);
     assert.match(text, /CMC/);
     assert.match(text, /%%EOF/);
+    const zip = zipStore([
+      { name: "briefing.pdf", data: pdf },
+      { name: "briefing.png", data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) },
+    ]);
+    assert.equal(zip[0], 0x50);
+    assert.equal(zip[1], 0x4b);
+    assert.equal(zip[2], 0x03);
+    assert.equal(zip[3], 0x04);
     assert.equal(jpegDimensions(new Uint8Array([0xff, 0xd8, 0xff, 0xd9])), null);
   });
 });
