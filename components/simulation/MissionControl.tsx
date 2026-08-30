@@ -13,7 +13,10 @@ import { HudOverlays } from "@/components/assets/HudOverlays";
 export function MissionControl() {
   return (
     <SimulationProvider>
-      <div className="relative h-screen w-screen overflow-hidden bg-[#05070c] text-slate-100">
+      <div
+        className="relative h-screen w-screen overflow-hidden bg-[#05070c] text-slate-100"
+        data-testid="hud-ready"
+      >
         <MapViewport />
         <HudOverlays />
         <Header />

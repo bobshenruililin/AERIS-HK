@@ -2,6 +2,15 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.7.0] — 2026-08-30
+
+### Added
+
+- Always-on software Kowloon twin (Canvas2D, WGS84 → local ENU metres) with harbour fly-in, sun-lit extrusions, gold knapsack roofs, heat plumes, catchment arcs, and hospital picking — Deck.gl mounts only when a real GPU context exists.
+- Causal strip: HKO heat → Gagge S → CVI → A&E λ → M/M/c → knapsack Δ, interrogable from the mission header.
+- One-click briefing tour (harbour → 15:00 peak → hottest Gagge node → locked roofs → KWH catchment).
+- Four additional tong-lau streets (Ki Lung, Kweilin, Portland, Reclamation). Gagge identity test `S = M − W − E − R − C` on every footprint.
+
 ## [0.6.0] — 2026-08-30
 
 ### Added

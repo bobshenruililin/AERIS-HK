@@ -8,7 +8,7 @@ Aerospace-grade urban microclimate digital twin and Hospital Authority cardiovas
 ## Stack
 
 - Next.js 14 App Router, TypeScript, Tailwind CSS
-- Deck.gl v9 + MapLibre (Carto Dark Matter) — WGS84 display CRS
+- Deck.gl v9 + MapLibre (Carto Dark Matter) when a GPU is present; otherwise a software ENU twin (Canvas2D) with the same cool-roof / plume / catchment story
 - PostGIS (EPSG:2326 authority, dual-write EPSG:4326) with Arrow IPC snapshots for DuckDB-WASM
 - First-principles Gagge 2-node + CVI + M/M/c (CMC, KWH, QEH)
 - Live HKO Open Data (`/api/hko/envelope`) for Kowloon T/RH, WHOT, and 9-day forecast anchors
@@ -30,6 +30,7 @@ npm run ingest:hk80
 npm run test:crs
 npm run test:ha
 npm run test:cool-roof
+npm run test:twin
 ```
 
 PostGIS (HK80 / EPSG:2326) is the footprint authority. Either run a local cluster or:

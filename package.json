@@ -10,7 +10,8 @@
     "ingest:hk80": "tsx scripts/ingest-hk80.ts",
     "test:crs": "tsx --test scripts/crs-roundtrip.test.ts",
     "test:ha": "tsx --test scripts/ha-nowcast.test.ts",
-    "test:cool-roof": "tsx --test scripts/cool-roof-optimiser.test.ts"
+    "test:cool-roof": "tsx --test scripts/cool-roof-optimiser.test.ts",
+    "test:twin": "tsx --test scripts/twin-camera.test.ts"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.1.14",

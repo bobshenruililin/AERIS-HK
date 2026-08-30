@@ -55,6 +55,9 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Sun-tracked lighting, harbour fly-in, heat plumes, cool-roof discs, catchment arcs
 - [x] Mission strip + Gagge interrogation + sky-view / H/W physics
 - [x] 24-hour baseline vs scenario arrival sparkline
+- [x] Software ENU twin that still looks like the city when WebGL is absent
+- [x] Causal strip (heat → Gagge → CVI → A&E → M/M/c → knapsack) and briefing tour
+- [x] Expanded Sham Shui Po / Yau Tsim Mong street stock (Ki Lung, Kweilin, Portland, Reclamation)
 
 ## Phase 3 — Operationalisation
 

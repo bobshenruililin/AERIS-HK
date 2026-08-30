@@ -16,7 +16,7 @@ export function PolicyDrawer() {
       : 0;
 
   return (
-    <div className="pointer-events-none absolute right-0 top-64 z-20 w-full max-w-sm p-3 md:top-64 md:p-4">
+    <div className="pointer-events-none absolute right-0 top-[22rem] z-20 w-full max-w-sm p-3 md:top-[22rem] md:p-4">
       <GlassPanel>
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>

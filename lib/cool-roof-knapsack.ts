@@ -3,7 +3,7 @@ import { emptyCoolRoofPlan, planFromSelected } from "./cool-roof-optimiser";
 
 /**
  * Exact 0/1 knapsack: maximise local admissions averted subject to roof m² ≤ budget.
- * Weights are rounded to 1 m²; n=62 and W≈16e3 is ~1e6 cells.
+ * Weights are rounded to 1 m²; n≈100 and W≈2e4 is a few million cells.
  */
 export function selectCoolRoofsKnapsack(
   candidates: CoolRoofCandidate[],
