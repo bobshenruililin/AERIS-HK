@@ -7,7 +7,7 @@ import { GlassPanel } from "@/components/ui/GlassPanel";
 import { BASELINE_POLICY } from "@/lib/types";
 
 export function PolicyDrawer() {
-  const { policy, setPolicy, resetPolicy, impact } = useSimulation();
+  const { policy, setPolicy, resetPolicy, impact, coolRoofPlan, totalRoofM2, buildings } = useSimulation();
   const celebrated = useRef(false);
 
   useEffect(() => {
@@ -68,15 +68,40 @@ export function PolicyDrawer() {
         />
         <Slider
           icon={<ThermometerSun className="h-3.5 w-3.5" />}
-          label="Cool roof / albedo retrofit"
-          zh="涼屋頂反照率改造"
-          value={policy.coolRoofPercent}
+          label="Cool-roof retrofit budget"
+          zh="涼屋頂反照率改造預算"
+          value={Math.min(policy.coolRoofBudgetM2, Math.max(1, totalRoofM2))}
           min={0}
-          max={50}
+          max={Math.max(1, Math.round(totalRoofM2))}
           step={1}
-          display={`${policy.coolRoofPercent.toFixed(0)}% surface area`}
-          onChange={(coolRoofPercent) => setPolicy({ coolRoofPercent })}
+          display={`${Math.round(policy.coolRoofBudgetM2)} m²`}
+          testId="cool-roof-budget"
+          onChange={(coolRoofBudgetM2) => setPolicy({ coolRoofBudgetM2 })}
         />
+        <div
+          className="mb-2 rounded-xl border border-amber-300/20 bg-amber-400/5 px-3 py-2 text-[11px] text-amber-100/90"
+          data-testid="cool-roof-plan"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span>Targeted roofs</span>
+            <span className="font-mono text-amber-200" data-testid="cool-roof-selected">
+              {policy.coolRoofTargetIds.length} / {buildings.length}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-slate-400">
+            <span>
+              {Math.round(coolRoofPlan?.selectedAreaM2 ?? 0)} m² used ·{" "}
+              {Math.round(coolRoofPlan?.remainingBudgetM2 ?? Math.max(0, policy.coolRoofBudgetM2))} m² left
+            </span>
+            <span className="font-mono" data-testid="cool-roof-engine">
+              {coolRoofPlan?.engine === "duckdb-wasm" ? "DuckDB windows" : "greedy fallback"}
+            </span>
+          </div>
+          <div className="mt-1 text-[10px] text-slate-500">
+            District albedo {policy.coolRoofPercent.toFixed(1)} / 50 · local ranking averted{" "}
+            {(coolRoofPlan?.predictedAdmissionsAverted ?? 0).toFixed(2)}
+          </div>
+        </div>
 
         <label className="mt-2 flex cursor-pointer items-center justify-between rounded-xl bg-white/5 px-3 py-2">
           <span className="flex items-center gap-2 text-xs text-slate-200">
@@ -111,6 +136,8 @@ export function PolicyDrawer() {
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
           Deltas versus a zero-intervention counterfactual ({BASELINE_POLICY.coolingShelters} shelters, no DHC, no albedo, no bylaw).
+          Cool-roof targeting maximises 24-hour admissions averted for the m² budget via DuckDB{" "}
+          <span className="font-mono">ROW_NUMBER</span>/<span className="font-mono">SUM OVER</span> windows.
           Gagge heat storage and Bishai-style relative risk drive M/M/c arrivals at CMC, KWH and QEH.
         </p>
       </GlassPanel>
@@ -128,6 +155,7 @@ function Slider(props: {
   step: number;
   display: string;
   onChange: (value: number) => void;
+  testId?: string;
 }) {
   return (
     <label className="mb-2 block">
@@ -145,6 +173,7 @@ function Slider(props: {
         max={props.max}
         step={props.step}
         value={props.value}
+        data-testid={props.testId}
         onChange={(e) => props.onChange(Number(e.target.value))}
         className="mt-1 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-700 accent-cyan-400"
       />

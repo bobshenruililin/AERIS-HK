@@ -3,6 +3,8 @@
 import type {
   BuildingFeature,
   BuildingHourState,
+  CoolRoofCandidate,
+  CoolRoofPlan,
   CriticalBuildingRow,
   DistrictHourAggregate,
   DistrictName,
@@ -11,7 +13,9 @@ import type {
 } from "./types";
 import { classifyCvi } from "./epidemiology-engine";
 import { CVI_MODERATE_MAX } from "./constants";
-import { encodeHourlyIpc, hourlyRowsFromState, type HourIpcRow } from "./arrow-ipc";
+import { encodeCoolRoofCandidatesIpc, encodeHourlyIpc, hourlyRowsFromState, type HourIpcRow } from "./arrow-ipc";
+import { bindCoolRoofSql } from "./cool-roof-sql";
+import { emptyCoolRoofPlan, planFromSelected, selectCoolRoofsGreedyJs, totalRoofAreaM2 } from "./cool-roof-optimiser";
 
 type DuckDbModule = typeof import("@duckdb/duckdb-wasm");
 type AsyncDuckDB = import("@duckdb/duckdb-wasm").AsyncDuckDB;
@@ -318,6 +322,68 @@ async function runAerisAnalyticsExclusive(args: {
     await conn.close();
   }
 }
+
+export async function optimiseCoolRoofTargets(args: {
+  candidates: CoolRoofCandidate[];
+  budgetM2: number;
+  totalRoofM2: number;
+}): Promise<CoolRoofPlan> {
+  return enqueueDuckDb(() => optimiseCoolRoofTargetsExclusive(args));
+}
+
+async function optimiseCoolRoofTargetsExclusive(args: {
+  candidates: CoolRoofCandidate[];
+  budgetM2: number;
+  totalRoofM2: number;
+}): Promise<CoolRoofPlan> {
+  const started = performance.now();
+  const fallback = selectCoolRoofsGreedyJs(args.candidates, args.budgetM2, args.totalRoofM2);
+  if (args.candidates.length === 0 || args.budgetM2 <= 0) {
+    return {
+      ...emptyCoolRoofPlan(args.budgetM2, args.totalRoofM2, "greedy-fallback", performance.now() - started),
+    };
+  }
+
+  const db = await instantiateDuckDb();
+  if (!db) {
+    return { ...fallback, queryLatencyMs: performance.now() - started };
+  }
+
+  const conn = await db.connect();
+  try {
+    const ipc = encodeCoolRoofCandidatesIpc(args.candidates);
+    await ingestIpcTable(db, conn, "cool_roof_candidates", "cool_roof_candidates.arrow", ipc);
+    const sql = bindCoolRoofSql(args.budgetM2);
+    const result = await conn.query(sql);
+    const byId = new Map(args.candidates.map((row) => [row.buildingId, row]));
+    const selected: CoolRoofCandidate[] = [];
+    let lastCum = 0;
+    for (const rec of result.toArray()) {
+      const row = rec.toJSON() as Record<string, unknown>;
+      const id = String(row.building_id ?? "");
+      const candidate = byId.get(id);
+      if (!candidate) continue;
+      const cum = Number(row.cum_area_m2 ?? lastCum + candidate.roofM2);
+      if (cum > args.budgetM2 + 1e-6) break;
+      lastCum = cum;
+      selected.push(candidate);
+    }
+    return planFromSelected(
+      selected,
+      args.budgetM2,
+      args.totalRoofM2,
+      "duckdb-wasm",
+      performance.now() - started,
+    );
+  } catch (error) {
+    console.warn("[AERIS-HK] DuckDB cool-roof window query failed; using greedy fallback.", error);
+    return { ...fallback, queryLatencyMs: performance.now() - started };
+  } finally {
+    await conn.close();
+  }
+}
+
+export { totalRoofAreaM2 };
 
 export async function disposeDuckDb(): Promise<void> {
   if (!dbSingleton) return;

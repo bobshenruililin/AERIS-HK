@@ -39,6 +39,7 @@ export interface BuildingProperties {
   estimatedResidents: number;
   headingDeg: number;
   hk80: Hk80Coordinate;
+  roofAreaM2: number;
 }
 
 export interface BuildingFeature {
@@ -85,8 +86,33 @@ export interface SpatialBuildingsPayload {
 export interface PolicyState {
   coolingShelters: number;
   dhcOutreach: number;
+  /** District-scale albedo cooling, 0–50. Derived as 50 × selectedRoofM2 / totalRoofM2. */
   coolRoofPercent: number;
+  /** Retrofit budget in square metres of roof. */
+  coolRoofBudgetM2: number;
+  /** Building ids selected by the DuckDB (or greedy) targeting optimiser. */
+  coolRoofTargetIds: string[];
   acDeflectionBylaw: boolean;
+}
+
+export interface CoolRoofCandidate {
+  buildingId: string;
+  roofM2: number;
+  admissionsAverted: number;
+  efficiency: number;
+}
+
+export interface CoolRoofPlan {
+  selectedIds: string[];
+  selectedAreaM2: number;
+  budgetM2: number;
+  totalRoofM2: number;
+  remainingBudgetM2: number;
+  districtCoolRoofPercent: number;
+  /** Sum of local-only ranking averted (not the full district-cooling impact). */
+  predictedAdmissionsAverted: number;
+  engine: "duckdb-wasm" | "greedy-fallback";
+  queryLatencyMs: number;
 }
 
 export interface GaggeNodeState {
@@ -206,17 +232,23 @@ export interface DuckDbQueryBundle {
   arrowIpc: boolean;
 }
 
+export const DEFAULT_COOL_ROOF_STOCK_FRACTION = 0.08;
+
 export const BASELINE_POLICY: PolicyState = {
   coolingShelters: 0,
   dhcOutreach: 0,
   coolRoofPercent: 0,
+  coolRoofBudgetM2: 0,
+  coolRoofTargetIds: [],
   acDeflectionBylaw: false,
 };
 
 export const DEFAULT_POLICY: PolicyState = {
   coolingShelters: 4,
   dhcOutreach: 18,
-  coolRoofPercent: 8,
+  coolRoofPercent: 0,
+  coolRoofBudgetM2: 0,
+  coolRoofTargetIds: [],
   acDeflectionBylaw: false,
 };
 

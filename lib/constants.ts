@@ -25,6 +25,7 @@ export const CVI_COLOR_MODERATE: RGBA = [245, 158, 11, 225];
 export const CVI_COLOR_HIGH: RGBA = [239, 68, 68, 245];
 export const CVI_HOVER_LINE: RGBA = [34, 211, 238, 255];
 export const CVI_IDLE_LINE: RGBA = [15, 23, 42, 90];
+export const CVI_COOL_ROOF_LINE: RGBA = [251, 191, 36, 255];
 
 export const CVI_LOW_MAX = 40;
 export const CVI_MODERATE_MAX = 70;

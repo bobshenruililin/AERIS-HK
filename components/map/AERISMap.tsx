@@ -9,6 +9,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import {
   CARTO_DARK_MATTER_STYLE,
+  CVI_COOL_ROOF_LINE,
   CVI_HOVER_LINE,
   CVI_IDLE_LINE,
   EXTRUSION_SCALE,
@@ -21,10 +22,12 @@ import type { BuildingFeature, BuildingFeatureCollection, BuildingProperties } f
 import { buildingCentroid } from "@/lib/spatial-data";
 
 export default function AERISMap() {
-  const { buildings, snapshot, hour, hoveredId, selectedId, setHoveredId, setSelectedId } = useSimulation();
+  const { buildings, snapshot, hour, hoveredId, selectedId, setHoveredId, setSelectedId, policy } = useSimulation();
   const [viewState, setViewState] = useState<MapViewState>({ ...KOWLOON_VIEW });
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
   const [particles, setParticles] = useState<WindParticle[]>(particlesRef.current);
+
+  const targeted = useMemo(() => new Set(policy.coolRoofTargetIds), [policy.coolRoofTargetIds]);
 
   const cviById = useMemo(() => {
     const map = new Map<string, number>();
@@ -76,9 +79,14 @@ export default function AERISMap() {
         getElevation: (f) => f.properties.height * EXTRUSION_SCALE,
         getFillColor: (f) => cviColor(cviById.get(f.properties.id) ?? 0),
         getLineColor: (f) =>
-          f.properties.id === highlightId ? CVI_HOVER_LINE : CVI_IDLE_LINE,
+          f.properties.id === highlightId
+            ? CVI_HOVER_LINE
+            : targeted.has(f.properties.id)
+              ? CVI_COOL_ROOF_LINE
+              : CVI_IDLE_LINE,
         lineWidthMinPixels: 1,
-        getLineWidth: (f) => (f.properties.id === highlightId ? 2.4 : 0.6),
+        getLineWidth: (f) =>
+          f.properties.id === highlightId ? 2.4 : targeted.has(f.properties.id) ? 1.8 : 0.6,
         material: {
           ambient: 0.32,
           diffuse: 0.68,
@@ -87,9 +95,24 @@ export default function AERISMap() {
         },
         updateTriggers: {
           getFillColor: snapshot.hour,
-          getLineColor: highlightId,
-          getLineWidth: highlightId,
+          getLineColor: `${highlightId}:${policy.coolRoofTargetIds.join(",")}`,
+          getLineWidth: `${highlightId}:${policy.coolRoofTargetIds.join(",")}`,
         },
+      }),
+      new GeoJsonLayer<BuildingProperties>({
+        id: "aeris-cool-roof-targets",
+        data: {
+          type: "FeatureCollection",
+          features: buildings.filter((b) => targeted.has(b.properties.id)),
+        },
+        extruded: true,
+        filled: false,
+        wireframe: true,
+        pickable: false,
+        getElevation: (f) => f.properties.height * EXTRUSION_SCALE + 3,
+        getLineColor: CVI_COOL_ROOF_LINE,
+        lineWidthMinPixels: 2,
+        updateTriggers: { getElevation: policy.coolRoofTargetIds.join(",") },
       }),
       new GeoJsonLayer<BuildingProperties>({
         id: "aeris-buildings-hover-glow",
@@ -133,7 +156,7 @@ export default function AERISMap() {
         lineWidthMinPixels: 2,
       }),
     ];
-  }, [collection, cviById, snapshot.hour, hoveredId, selectedId, buildings, particles]);
+  }, [collection, cviById, snapshot.hour, hoveredId, selectedId, buildings, particles, targeted, policy.coolRoofTargetIds]);
 
   const onViewStateChange = useCallback((params: { viewState: Record<string, unknown> }) => {
     const next = params.viewState;

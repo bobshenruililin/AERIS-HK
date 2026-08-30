@@ -2,6 +2,19 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.5.0] — 2026-08-30
+
+### Added
+
+- Cool-roof targeting optimiser: given a roof-area budget (m²), DuckDB-WASM window functions (`ROW_NUMBER`, running `SUM(roof_m2) OVER`) pick the building set that maximises 24-hour catchment-weighted admissions averted.
+- HK80 shoelace / PostGIS `ST_Area(geom_hk80)` roof areas on every footprint (`properties.roofAreaM2`, Arrow `roof_m2`).
+- Policy drawer m² budget slider, gold map outlines for the selected set, and briefing table of targeted roofs.
+- `npm run test:cool-roof` for shoelace area, window SQL, greedy prefix, and ranking vs a worst-efficiency equal-area set.
+
+### Changed
+
+- Cool-roof physics is per-building (targeted ids get full albedo) with district air-temperature cooling scaled as 50 × selected m² / stock (full stock matches the old 50% slider).
+
 ## [0.4.0] — 2026-08-30
 
 ### Added

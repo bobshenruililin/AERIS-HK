@@ -13,6 +13,7 @@ import {
 import type {
   BuildingFeature,
   BuildingHourState,
+  CoolRoofPlan,
   DuckDbQueryBundle,
   HkoDiurnalEnvelope,
   PlaybackSpeed,
@@ -32,7 +33,13 @@ import {
   precomputeHourlyCache,
 } from "@/lib/epidemiology-engine";
 import { wrapHour } from "@/lib/utils";
-import { runAerisAnalytics } from "@/lib/duckdb-engine";
+import { optimiseCoolRoofTargets, runAerisAnalytics } from "@/lib/duckdb-engine";
+import {
+  defaultCoolRoofBudgetM2,
+  rankCoolRoofCandidates,
+  sameIdSet,
+  totalRoofAreaM2,
+} from "@/lib/cool-roof-optimiser";
 
 interface SimulationContextValue {
   buildings: BuildingFeature[];
@@ -58,6 +65,8 @@ interface SimulationContextValue {
   spatial: SpatialSnapshotMeta;
   haNowcast: HaNowcast | null;
   haError: string | null;
+  coolRoofPlan: CoolRoofPlan | null;
+  totalRoofM2: number;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
@@ -116,7 +125,10 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [hour, setHourState] = useState(15);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
-  const [policy, setPolicyState] = useState<PolicyState>(DEFAULT_POLICY);
+  const [policy, setPolicyState] = useState<PolicyState>(() => ({
+    ...DEFAULT_POLICY,
+    coolRoofBudgetM2: defaultCoolRoofBudgetM2(seed),
+  }));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<DuckDbQueryBundle | null>(null);
@@ -124,8 +136,10 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [envelopeError, setEnvelopeError] = useState<string | null>(null);
   const [haNowcast, setHaNowcast] = useState<HaNowcast | null>(null);
   const [haError, setHaError] = useState<string | null>(null);
+  const [coolRoofPlan, setCoolRoofPlan] = useState<CoolRoofPlan | null>(null);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
+  const budgetTouched = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -210,6 +224,56 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const totalRoofM2 = useMemo(() => totalRoofAreaM2(buildings), [buildings]);
+
+  useEffect(() => {
+    if (budgetTouched.current) return;
+    const next = defaultCoolRoofBudgetM2(buildings);
+    setPolicyState((prev) =>
+      Math.abs(prev.coolRoofBudgetM2 - next) < 0.5 ? prev : { ...prev, coolRoofBudgetM2: next },
+    );
+  }, [buildings]);
+
+  const coolRoofCandidates = useMemo(
+    () =>
+      rankCoolRoofCandidates(buildings, envelope, {
+        ...policy,
+        coolRoofPercent: 0,
+        coolRoofTargetIds: [],
+      }),
+    // Ranking is local-only: ignore budget, targets, and district percent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buildings, envelope, policy.coolingShelters, policy.dhcOutreach, policy.acDeflectionBylaw],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void optimiseCoolRoofTargets({
+      candidates: coolRoofCandidates,
+      budgetM2: policy.coolRoofBudgetM2,
+      totalRoofM2,
+    }).then((plan) => {
+      if (cancelled) return;
+      setCoolRoofPlan(plan);
+      setPolicyState((prev) => {
+        if (
+          sameIdSet(prev.coolRoofTargetIds, plan.selectedIds) &&
+          Math.abs(prev.coolRoofPercent - plan.districtCoolRoofPercent) < 1e-6
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          coolRoofTargetIds: plan.selectedIds,
+          coolRoofPercent: plan.districtCoolRoofPercent,
+        };
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [coolRoofCandidates, policy.coolRoofBudgetM2, totalRoofM2]);
+
   const cache = useMemo(
     () => precomputeHourlyCache(policy, buildings, envelope),
     [policy, buildings, envelope],
@@ -265,12 +329,17 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setPolicy = useCallback((patch: Partial<PolicyState>) => {
+    if (patch.coolRoofBudgetM2 != null) budgetTouched.current = true;
     setPolicyState((prev) => ({ ...prev, ...patch }));
   }, []);
 
   const resetPolicy = useCallback(() => {
-    setPolicyState(DEFAULT_POLICY);
-  }, []);
+    budgetTouched.current = false;
+    setPolicyState({
+      ...DEFAULT_POLICY,
+      coolRoofBudgetM2: defaultCoolRoofBudgetM2(buildings),
+    });
+  }, [buildings]);
 
   const value = useMemo<SimulationContextValue>(
     () => ({
@@ -297,6 +366,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       spatial,
       haNowcast,
       haError,
+      coolRoofPlan,
+      totalRoofM2,
     }),
     [
       buildings,
@@ -318,6 +389,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       spatial,
       haNowcast,
       haError,
+      coolRoofPlan,
+      totalRoofM2,
     ],
   );
 

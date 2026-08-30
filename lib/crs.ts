@@ -302,3 +302,35 @@ export function lonLatRingToWgs84Wkt(ring: Array<[number, number]>): string {
   });
   return `POLYGON((${parts.join(", ")}))`;
 }
+
+/** Planimetric polygon area in m² from HK80 (EPSG:2326) vertices. */
+export function hk80ShoelaceAreaM2(points: Hk80Point[]): number {
+  if (points.length < 3) return 0;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const closed =
+    Math.abs(first.easting - last.easting) < 1e-6 && Math.abs(first.northing - last.northing) < 1e-6
+      ? points.slice(0, -1)
+      : points;
+  if (closed.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0; i < closed.length; i += 1) {
+    const a = closed[i];
+    const b = closed[(i + 1) % closed.length];
+    sum += a.easting * b.northing - b.easting * a.northing;
+  }
+  return Math.abs(sum) / 2;
+}
+
+/**
+ * Roof / footprint area in m²: project a WGS84 ring to HK80 metres, then shoelace.
+ * This is the client-side analogue of PostGIS `ST_Area(geom_hk80)`.
+ */
+export function wgs84RingAreaM2(ring: Array<[number, number]>): number {
+  if (ring.length < 3) return 0;
+  const hk = closeLonLatRing(ring).map(([lon, lat]) => {
+    assertWgs84(lon, lat);
+    return wgs84ToHk80(lon, lat);
+  });
+  return hk80ShoelaceAreaM2(hk);
+}

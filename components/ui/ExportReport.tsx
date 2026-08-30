@@ -8,7 +8,8 @@ import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
 
 export function ExportReport() {
-  const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial, haNowcast } = useSimulation();
+  const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial, haNowcast, coolRoofPlan } =
+    useSimulation();
   const [open, setOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const label = hkoStatusLabel(snapshot.hkoStatus);
@@ -147,8 +148,10 @@ export function ExportReport() {
               <h2>4. Policy package currently on the board</h2>
               <p>
                 Night cooling shelters: {policy.coolingShelters}/30 · DHC nurse outreach: {policy.dhcOutreach}% ·
-                Cool-roof albedo retrofit: {policy.coolRoofPercent}% · AC heat deflection bylaw:{" "}
-                {policy.acDeflectionBylaw ? "IN FORCE" : "not enacted"}.
+                Cool-roof albedo budget: {Math.round(policy.coolRoofBudgetM2)} m² targeting {policy.coolRoofTargetIds.length}{" "}
+                roofs ({Math.round(coolRoofPlan?.selectedAreaM2 ?? 0)} m² selected, district albedo{" "}
+                {policy.coolRoofPercent.toFixed(1)}/50 via {coolRoofPlan?.engine ?? "pending"}) · AC heat deflection
+                bylaw: {policy.acDeflectionBylaw ? "IN FORCE" : "not enacted"}.
               </p>
               <p>
                 24-hour A&E cardiovascular presentations averted: <strong>{impact.admissionsAverted.toFixed(1)}</strong>
@@ -182,6 +185,36 @@ export function ExportReport() {
                   })}
                 </tbody>
               </table>
+              <h2>5b. Cool-roof targeting set (DuckDB window greedy)</h2>
+              <p className="meta">
+                Budget {Math.round(policy.coolRoofBudgetM2)} m² of roof. Ranked by 24-hour catchment-weighted
+                admissions averted per m² with ROW_NUMBER / running SUM(roof_m2) OVER. Selected area{" "}
+                {Math.round(coolRoofPlan?.selectedAreaM2 ?? 0)} m² · local ranking averted{" "}
+                {(coolRoofPlan?.predictedAdmissionsAverted ?? 0).toFixed(2)}.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Building</th>
+                    <th>District</th>
+                    <th>Roof m²</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {policy.coolRoofTargetIds.slice(0, 16).map((id) => {
+                    const meta = buildings.find((b) => b.properties.id === id);
+                    return (
+                      <tr key={id}>
+                        <td>
+                          {meta?.properties.nameEn} / {meta?.properties.nameZh}
+                        </td>
+                        <td>{meta?.properties.district}</td>
+                        <td>{meta ? meta.properties.roofAreaM2.toFixed(0) : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
               <h2>6. Recommended operational actions</h2>
               <ol>
                 <li>Activate additional designated night cooling shelters within 400 m of Pei Ho / Apliu and Temple Street canyons before 19:00 HKT.</li>
@@ -196,6 +229,9 @@ export function ExportReport() {
                 0.22·elderly + 0.15·blockage, indexed 0–100. ED demand uses M/M/c queues. Analytics engine:{" "}
                 {analytics?.engine ?? "pending"} ({analytics ? `${analytics.queryLatencyMs.toFixed(2)} ms` : "n/a"}
                 {analytics?.arrowIpc ? ", Arrow IPC" : ""}).
+                Cool-roof targeting ranks footprints by 24-hour catchment-weighted admissions averted per m² of
+                roof and selects a prefix whose running SUM(roof_m2) stays within the budget (DuckDB window
+                functions, greedy fallback if WASM is unavailable).
                 Authoritative footprints live in PostGIS as HK80 (EPSG:2326) with dual-write WGS84 (EPSG:4326)
                 for Deck.gl ({spatial.authority}, {spatial.buildingCount} buildings
                 {spatial.dualWrite ? ", dual-write on" : ""}). Meteorological forcing is a rolling 24-hour HKO

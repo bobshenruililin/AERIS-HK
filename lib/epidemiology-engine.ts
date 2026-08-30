@@ -54,6 +54,18 @@ function relativeHumidity(hour: number, envelope: HkoDiurnalEnvelope | null): nu
   return clamp(0.7 + 0.12 * nightBoost, 0.4, 0.95);
 }
 
+/**
+ * Local albedo coverage for a footprint: 1 if the optimiser targeted it,
+ * otherwise the uniform 0–50% slider when no targeting set is active.
+ */
+export function localCoolRoofFraction(building: BuildingFeature, policy: PolicyState): number {
+  const targets = policy.coolRoofTargetIds;
+  if (targets && targets.length > 0) {
+    return targets.includes(building.properties.id) ? 1 : 0;
+  }
+  return clamp(policy.coolRoofPercent / 50, 0, 1);
+}
+
 function regionalAirTemp(hour: number, coolRoofPercent: number, envelope: HkoDiurnalEnvelope | null): number {
   const h = wrapHour(hour);
   const roofCool = 1.15 * (coolRoofPercent / 50);
@@ -66,7 +78,7 @@ function regionalAirTemp(hour: number, coolRoofPercent: number, envelope: HkoDiu
 
 function effectiveAcHeat(building: BuildingFeature, policy: PolicyState): number {
   const deflect = policy.acDeflectionBylaw ? 0.58 : 1;
-  const roof = 1 - 0.18 * (policy.coolRoofPercent / 50);
+  const roof = 1 - 0.18 * localCoolRoofFraction(building, policy);
   return building.properties.acAnthropogenicHeat * deflect * roof;
 }
 
@@ -108,7 +120,7 @@ export function indoorAirTemp(
     2.55 * building.properties.subdividedFlatDensity +
     0.012 * effectiveAcHeat(building, policy) +
     0.85 * building.properties.ventilationBlockage -
-    1.8 * (policy.coolRoofPercent / 50);
+    1.8 * localCoolRoofFraction(building, policy);
   const mass = 0.38 + 0.52 * building.properties.subdividedFlatDensity;
   const fabric = mass * (laggedCanyon + trap * 0.42) + (1 - mass) * liveCanyon;
   const shelter = nightShelterRelief(hour, policy);
@@ -367,7 +379,7 @@ function heatRelativeRisk(state: BuildingHourState, building: BuildingFeature, p
   return cviTerm * strainTerm * poverty * (1 - 0.22 * dhc);
 }
 
-function hourlyArrivalsForBuilding(
+export function hourlyArrivalsForBuilding(
   building: BuildingFeature,
   state: BuildingHourState,
   policy: PolicyState,
@@ -598,6 +610,32 @@ export function computePolicyImpact(
     baselineMortalityIndex: baselineMort,
     scenarioMortalityIndex: scenarioMort,
   };
+}
+
+export function catchmentWeightedArrivals(
+  building: BuildingFeature,
+  state: BuildingHourState,
+  policy: PolicyState,
+): number {
+  const arrivals = hourlyArrivalsForBuilding(building, state, policy);
+  let weighted = 0;
+  for (const spec of HOSPITALS) {
+    weighted += arrivals * spec.catchmentWeight[building.properties.district];
+  }
+  return weighted;
+}
+
+export function buildingClusterLoad24h(
+  building: BuildingFeature,
+  envelope: HkoDiurnalEnvelope | null,
+  policy: PolicyState,
+): number {
+  let total = 0;
+  for (let hour = 0; hour < 24; hour += 1) {
+    const state = evaluateBuildingAtHour(building, hour, policy, envelope);
+    total += catchmentWeightedArrivals(building, state, policy);
+  }
+  return total;
 }
 
 export function cviColor(cvi: number): [number, number, number, number] {

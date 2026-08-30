@@ -31,7 +31,8 @@ SELECT
   ST_X(ST_Centroid(geom_wgs84)) AS centroid_lon,
   ST_Y(ST_Centroid(geom_wgs84)) AS centroid_lat,
   ST_SRID(geom_hk80) AS source_srid,
-  ST_SRID(geom_wgs84) AS display_srid
+  ST_SRID(geom_wgs84) AS display_srid,
+  ST_Area(geom_hk80)::double precision AS roof_m2
 FROM aeris.buildings
 ORDER BY id
 `;
@@ -62,6 +63,7 @@ interface FootprintQueryRow {
   centroid_lat: number;
   source_srid: number;
   display_srid: number;
+  roof_m2: number;
 }
 
 async function tableExists(): Promise<boolean> {
@@ -112,6 +114,7 @@ function rowsToIpc(rows: FootprintQueryRow[]): FootprintIpcRow[] {
     centroid_lat: Number(row.centroid_lat),
     source_srid: Number(row.source_srid),
     display_srid: Number(row.display_srid),
+    roof_m2: Number(row.roof_m2),
   }));
 }
 
@@ -144,6 +147,7 @@ export async function loadBuildingsPayload(): Promise<SpatialBuildingsPayload> {
     featureFromPostgisRow({
       ...row,
       geom_wgs84_geojson: row.geom_wgs84_geojson,
+      roof_m2: row.roof_m2,
     }),
   );
   return {

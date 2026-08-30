@@ -1,5 +1,5 @@
 import { tableFromIPC, tableFromJSON, tableToIPC } from "apache-arrow";
-import type { BuildingFeature, BuildingHourState, DistrictName } from "./types";
+import type { BuildingFeature, BuildingHourState, CoolRoofCandidate, DistrictName } from "./types";
 import { lonLatRingToWgs84Wkt, wgs84RingToHk80Wkt } from "./crs";
 import { buildingCentroid } from "./spatial-data";
 
@@ -30,6 +30,7 @@ export interface FootprintIpcRow {
   centroid_lat: number;
   source_srid: number;
   display_srid: number;
+  roof_m2: number;
 }
 
 export interface HourIpcRow {
@@ -78,6 +79,7 @@ export function decodeFootprintsIpc(bytes: Uint8Array | ArrayBuffer): FootprintI
       centroid_lat: Number(row.centroid_lat),
       source_srid: Number(row.source_srid),
       display_srid: Number(row.display_srid),
+      roof_m2: Number(row.roof_m2),
     };
   });
 }
@@ -116,6 +118,7 @@ export function footprintsFromBuildings(buildings: BuildingFeature[]): Footprint
       centroid_lat: centroid[1],
       source_srid: 2326,
       display_srid: 4326,
+      roof_m2: p.roofAreaM2,
     };
   });
 }
@@ -143,4 +146,18 @@ export function hourlyRowsFromState(
       residents: props.estimatedResidents,
     };
   });
+}
+
+export function encodeCoolRoofCandidatesIpc(candidates: CoolRoofCandidate[]): Uint8Array {
+  return tableToIPC(
+    tableFromJSON(
+      candidates.map((row) => ({
+        building_id: row.buildingId,
+        roof_m2: row.roofM2,
+        admissions_averted: row.admissionsAverted,
+        efficiency: row.efficiency,
+      })) as unknown as Record<string, unknown>[],
+    ),
+    "file",
+  );
 }

@@ -40,9 +40,14 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Privacy gate rejects patient-level keys / HKID-shaped tokens (`npm run test:ha`)
 - [x] `GET /api/ha/nowcast` and `POST /api/ha/ingest` never ship patient identifiers
 
-### `/goal` Cool-roof targeting optimiser
+### `/goal` Cool-roof targeting optimiser (complete)
 
-Given a budget (m² of albedo retrofit), select the building set that maximises 24-hour admissions averted using DuckDB window functions.
+- [x] Roof area (m²) from HK80 shoelace / PostGIS `ST_Area(geom_hk80)` on every footprint
+- [x] Budget slider in m² of albedo retrofit; default 8% of roof stock
+- [x] DuckDB `ROW_NUMBER` + running `SUM(roof_m2) OVER` selects the building set that maximises 24-hour admissions averted per m²
+- [x] Local Gagge/CVI physics apply only to targeted ids; district cooling scales with selected area / stock
+- [x] Map gold outlines, HUD, and DH/WHO briefing show the selected set
+- [x] `npm run test:cool-roof` (greedy ≡ window prefix, shoelace area, ranking vs worst-set)
 
 ## Phase 3 — Operationalisation
 

@@ -156,6 +156,7 @@ describe("PostGIS EPSG:2326 dual-write and ST_Transform round-trip", () => {
     assert.ok(decoded.every((row) => row.source_srid === 2326 && row.display_srid === 4326));
     assert.ok(decoded.every((row) => row.geom_hk80_wkt.startsWith("POLYGON")));
     assert.ok(decoded.every((row) => row.centroid_lon > 113.8 && row.centroid_lon < 114.5));
+    assert.ok(decoded.every((row) => Number(row.roof_m2) > 80), "PostGIS ST_Area(geom_hk80) roof_m2");
   });
 
   it("in-memory Arrow encoder matches building count", () => {

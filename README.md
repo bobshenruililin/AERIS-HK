@@ -13,6 +13,7 @@ Aerospace-grade urban microclimate digital twin and Hospital Authority cardiovas
 - First-principles Gagge 2-node + CVI + M/M/c (CMC, KWH, QEH)
 - Live HKO Open Data (`/api/hko/envelope`) for Kowloon T/RH, WHOT, and 9-day forecast anchors
 - Anonymised HA A&E nowcast (`/api/ha/nowcast`) — hospital aggregates only; M/M/c μ/c from Cat 1–3 mix
+- Cool-roof targeting optimiser — m² budget → DuckDB window-ranked building set maximising 24-hour admissions averted
 
 ## Quick start
 
@@ -28,6 +29,7 @@ npm run build
 npm run ingest:hk80
 npm run test:crs
 npm run test:ha
+npm run test:cool-roof
 ```
 
 PostGIS (HK80 / EPSG:2326) is the footprint authority. Either run a local cluster or:

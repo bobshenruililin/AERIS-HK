@@ -1,5 +1,6 @@
 import type { BuildingFeature, DistrictName, SpatialBuildingsPayload, SpatialSnapshotMeta } from "./types";
-import { assertWgs84 } from "./crs";
+import { assertWgs84, wgs84RingAreaM2 } from "./crs";
+import { roundTo } from "./utils";
 
 export const SYNTHETIC_SPATIAL_META: SpatialSnapshotMeta = {
   authority: "synthetic-seed",
@@ -35,6 +36,7 @@ export function featureFromPostgisRow(row: {
   hk80_easting: number;
   hk80_northing: number;
   geom_wgs84_geojson: GeoJsonPolygon | string;
+  roof_m2?: number;
 }): BuildingFeature {
   const geom =
     typeof row.geom_wgs84_geojson === "string"
@@ -73,6 +75,12 @@ export function featureFromPostgisRow(row: {
         easting: Number(row.hk80_easting),
         northing: Number(row.hk80_northing),
       },
+      roofAreaM2: roundTo(
+        Number.isFinite(Number(row.roof_m2)) && Number(row.roof_m2) > 0
+          ? Number(row.roof_m2)
+          : wgs84RingAreaM2(ring),
+        2,
+      ),
     },
   };
 }

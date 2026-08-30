@@ -5,7 +5,7 @@ import { GlassPanel } from "@/components/ui/GlassPanel";
 import { INDOOR_HAZARD_C } from "@/lib/constants";
 
 export function BuildingInspector() {
-  const { buildings, selectedId, hoveredId, setSelectedId } = useSimulation();
+  const { buildings, selectedId, hoveredId, setSelectedId, policy } = useSimulation();
   const state = useSelectedBuildingState();
   const id = selectedId ?? hoveredId;
   const feature = buildings.find((b) => b.properties.id === id);
@@ -43,6 +43,11 @@ export function BuildingInspector() {
           <Stat label="AC rejector" value={`${p.acAnthropogenicHeat.toFixed(0)} W/m²`} />
           <Stat label="CVI" value={state.cvi.toFixed(1)} warn={state.cvi >= 70} />
           <Stat label="24-hr CVD tier" value={state.cviTier.toUpperCase()} warn={state.cviTier === "high" || state.cviTier === "critical"} />
+          <Stat label="Roof area" value={`${p.roofAreaM2.toFixed(0)} m²`} />
+          <Stat
+            label="Cool-roof target"
+            value={policy.coolRoofTargetIds.includes(p.id) ? "SELECTED" : "—"}
+          />
         </div>
         <div className="mt-2 font-mono text-[10px] text-slate-500">
           HK80 E {p.hk80.easting.toFixed(1)} N {p.hk80.northing.toFixed(1)} · lag {state.thermalLagHours.toFixed(2)} h ·

@@ -9,7 +9,8 @@
     "lint": "next lint",
     "ingest:hk80": "tsx scripts/ingest-hk80.ts",
     "test:crs": "tsx --test scripts/crs-roundtrip.test.ts",
-    "test:ha": "tsx --test scripts/ha-nowcast.test.ts"
+    "test:ha": "tsx --test scripts/ha-nowcast.test.ts",
+    "test:cool-roof": "tsx --test scripts/cool-roof-optimiser.test.ts"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.1.14",

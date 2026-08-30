@@ -11,7 +11,8 @@ import { solarElevationDeg } from "@/lib/solar";
 import { ExportReport } from "@/components/ui/ExportReport";
 
 export function Header() {
-  const { snapshot, analytics, hour, envelope, envelopeError, spatial, haNowcast, haError } = useSimulation();
+  const { snapshot, analytics, hour, envelope, envelopeError, spatial, haNowcast, haError, coolRoofPlan, policy } =
+    useSimulation();
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const elev = solarElevationDeg(hour);
   const bedPct = snapshot.clusterBedStress * 100;
@@ -58,6 +59,9 @@ export function Header() {
       : haError
         ? `HA nowcast error: ${haError}`
         : "HA CMS / A&E nowcast ingest…",
+    coolRoofPlan
+      ? `Cool-roof target ${coolRoofPlan.selectedIds.length} roofs · ${Math.round(coolRoofPlan.selectedAreaM2)}/${Math.round(coolRoofPlan.budgetM2)} m² · ${coolRoofPlan.engine === "duckdb-wasm" ? "DuckDB windows" : "greedy fallback"} · district albedo ${policy.coolRoofPercent.toFixed(1)}/50`
+      : "Cool-roof optimiser warming",
     `Solar elevation ${elev.toFixed(1)}° · ${formatHourLabel(hour)} HKT`,
   ];
 

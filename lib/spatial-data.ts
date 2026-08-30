@@ -1,4 +1,4 @@
-import { metersPerDegree, wgs84ToHk80, assertWgs84 } from "./crs";
+import { metersPerDegree, wgs84ToHk80, assertWgs84, wgs84RingAreaM2 } from "./crs";
 import type {
   BuildingFeature,
   BuildingFeatureCollection,
@@ -400,6 +400,7 @@ function buildFeature(street: StreetBlueprint, lot: LotOverride, index: number, 
     estimatedResidents,
     headingDeg: street.headingDeg,
     hk80: { easting: roundTo(hk80.easting, 2), northing: roundTo(hk80.northing, 2) },
+    roofAreaM2: roundTo(wgs84RingAreaM2(ring), 2),
   };
 
   return {
