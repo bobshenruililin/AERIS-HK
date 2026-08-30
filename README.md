@@ -22,7 +22,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The map mounts client-side only (`ssr: false`).
+Open [http://localhost:3000](http://localhost:3000). The map is a software ENU twin (Canvas2D) so the city is visible without WebGL. Append `?gpu=1` to mount Deck.gl + MapLibre when a healthy WebGL2 GPU is present.
 
 ```bash
 npm run build
