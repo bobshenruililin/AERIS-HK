@@ -288,24 +288,24 @@ export default function AERISMap() {
       }),
       new GeoJsonLayer<BuildingProperties>({
         id: "aeris-buildings",
-        data: collection,
+        data: lod === 2 ? collection : { type: "FeatureCollection", features: [] },
         visible: lod === 2,
         extruded: true,
         filled: !hudLayers.buildingWireframes,
         wireframe: true,
         pickable: lod === 2,
         opacity: hudLayers.buildingWireframes ? 0.35 : 0.96,
-        getElevation: (f) => packedElevationAt(gpuPack, f.properties.id, hourFloor),
-        getFillColor: (f) => packedColorAt(gpuPack, f.properties.id, hourFloor),
+        getElevation: (f) => packedElevationAt(gpuPack, f?.properties?.id ?? "", hourFloor),
+        getFillColor: (f) => packedColorAt(gpuPack, f?.properties?.id ?? "", hourFloor),
         getLineColor: (f) =>
-          f.properties.id === highlightId
+          (f?.properties?.id ?? "") === highlightId
             ? CVI_HOVER_LINE
-            : targeted.has(f.properties.id)
+            : targeted.has(f?.properties?.id ?? "")
               ? CVI_COOL_ROOF_LINE
               : CVI_IDLE_LINE,
         lineWidthMinPixels: 1,
         getLineWidth: (f) =>
-          f.properties.id === highlightId ? 2.4 : targeted.has(f.properties.id) ? 1.8 : 0.6,
+          (f?.properties?.id ?? "") === highlightId ? 2.4 : targeted.has(f?.properties?.id ?? "") ? 1.8 : 0.6,
         material: {
           ambient: 0.28,
           diffuse: 0.72,
@@ -321,7 +321,7 @@ export default function AERISMap() {
           getLineWidth: `${highlightId}:${policy.coolRoofTargetIds.join(",")}`,
         },
         acPulse: acPulseFromHour(hour, hudLayers.thermalShimmer),
-        getAcWatts: (f: { properties: BuildingProperties }) => packedAcWattsAt(gpuPack, f.properties.id, hourFloor),
+        getAcWatts: (f: { properties?: BuildingProperties }) => packedAcWattsAt(gpuPack, f?.properties?.id ?? "", hourFloor),
       } as ConstructorParameters<typeof GeoJsonLayer<BuildingProperties>>[0]),
       new ColumnLayer({
         id: "aeris-instances",
@@ -386,7 +386,7 @@ export default function AERISMap() {
         filled: false,
         wireframe: true,
         pickable: false,
-        getElevation: (f) => f.properties.height * EXTRUSION_SCALE + 6,
+        getElevation: (f) => (f?.properties?.height ?? 20) * EXTRUSION_SCALE + 6,
         getLineColor: CVI_HOVER_LINE,
         lineWidthMinPixels: 3,
         updateTriggers: { getElevation: highlightId },

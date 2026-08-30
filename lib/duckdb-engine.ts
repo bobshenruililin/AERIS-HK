@@ -13,7 +13,7 @@ import type {
 } from "./types";
 import { classifyCvi } from "./epidemiology-engine";
 import { CVI_MODERATE_MAX } from "./constants";
-import { encodeCoolRoofCandidatesIpc, type HourIpcRow } from "./arrow-ipc";
+import { encodeCoolRoofCandidatesIpc } from "./arrow-ipc";
 import { encodeHourColumnsIpc, groupDistrictHourlyColumns, packHourColumns, queryHourColumns } from "./arrow-columns";
 import { bindCoolRoofSql } from "./cool-roof-sql";
 import { emptyCoolRoofPlan, planFromSelected, selectCoolRoofsGreedyJs, totalRoofAreaM2 } from "./cool-roof-optimiser";
@@ -75,75 +75,6 @@ async function instantiateDuckDb(): Promise<AsyncDuckDB | null> {
   })();
 
   return initPromise;
-}
-
-function fallbackDistrictHourly(rows: HourIpcRow[]): DistrictHourAggregate[] {
-  const buckets = new Map<string, DistrictHourAggregate & { cviSum: number; wbgtSum: number; taSum: number }>();
-  for (const row of rows) {
-    const key = `${row.district}:${row.hour}`;
-    const current = buckets.get(key) ?? {
-      district: row.district,
-      hour: row.hour,
-      meanCvi: 0,
-      meanWbgt: 0,
-      meanIndoorTa: 0,
-      buildingCount: 0,
-      cviSum: 0,
-      wbgtSum: 0,
-      taSum: 0,
-    };
-    current.cviSum += row.cvi;
-    current.wbgtSum += row.micro_wbgt;
-    current.taSum += row.indoor_ta;
-    current.buildingCount += 1;
-    buckets.set(key, current);
-  }
-  return Array.from(buckets.values())
-    .map((b) => ({
-      district: b.district,
-      hour: b.hour,
-      meanCvi: b.cviSum / b.buildingCount,
-      meanWbgt: b.wbgtSum / b.buildingCount,
-      meanIndoorTa: b.taSum / b.buildingCount,
-      buildingCount: b.buildingCount,
-    }))
-    .sort((a, b) => a.district.localeCompare(b.district) || a.hour - b.hour);
-}
-
-function fallbackTopCritical(rows: HourIpcRow[], hour: number, limit = 10): CriticalBuildingRow[] {
-  const h = Math.round(hour) % 24;
-  return rows
-    .filter((r) => r.hour === h && r.cvi >= CVI_MODERATE_MAX)
-    .sort((a, b) => b.cvi - a.cvi)
-    .slice(0, limit)
-    .map((r) => ({
-      buildingId: r.building_id,
-      nameEn: r.name_en,
-      nameZh: r.name_zh,
-      district: r.district,
-      hour: r.hour,
-      cvi: r.cvi,
-      microWbgt: r.micro_wbgt,
-      indoorTa: r.indoor_ta,
-      cviTier: classifyCvi(r.cvi),
-    }));
-}
-
-function emptyBundle(
-  rows: HourIpcRow[],
-  hour: number,
-  started: number,
-  engine: DuckDbQueryBundle["engine"],
-): DuckDbQueryBundle {
-  return {
-    districtHourly: fallbackDistrictHourly(rows),
-    topCritical: fallbackTopCritical(rows, hour),
-    queryLatencyMs: performance.now() - started,
-    engine,
-    footprintsLoaded: false,
-    footprintCount: 0,
-    arrowIpc: false,
-  };
 }
 
 async function ingestIpcTable(

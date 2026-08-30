@@ -135,19 +135,30 @@ Typed arrays in `InstancePack` are allocated once per `buildings`/`cache` identi
 
 ## 7. Measured after (this revision)
 
-Captured by `node --env-file=.env.local --import tsx scripts/benchmark.ts` and `npm run test:arrow` / `test:instance` / `test:cache`.
+Captured 2026-08-30T16:20:31Z by `node --env-file=.env.local --import tsx scripts/benchmark.ts` plus `npx tsc --noEmit`, `npm run test:arrow` / `test:instance` / `test:cache` / `test:db`. Host: same Cloud Agent VM class as `BENCHMARK_REPORT.md`.
 
-_Placeholder filled after the local bench run in this agent environment._
+| Probe | After | vs before |
+| --- | ---: | --- |
+| Instance pack count | **20,480** | 168 accessor extrusions |
+| Instance hour-slice p50 | **0.0009 ms** | n/a (new path) |
+| Instance street LoD visible | **168** | same footprint count, GeoJSON only at street |
+| Arrow `queryHourColumns` 12,000 rows p50 | **0.11 ms** | HUD ingest **176 ms** on every scrub |
+| Arrow `queryHourColumns` 12,000 rows p95 | **0.18 ms** | still ≪ 5 ms |
+| DuckDB-WASM 10k `GROUP BY` (unchanged engine) | ~197 ms (Worker, ingest only) | not on the playbar path |
+| Neon centroid bbox `SELECT` | **21.91 ms** | no prior spatial btree |
+| Neon timestamp aggregate | **15.04 ms** | uses `hourly_cluster_ts_cluster_idx` |
+| Neon COUNT cold / district AVG warm | 20.12 / 15.27 ms | 18.42 / 17.48 ms (same order) |
+| Neon join | **14.44 ms** | 18.95 ms |
+| CPU `projectEnu` 1080p mean / p95 | 0.45 / 2.00 ms | 0.33 / 0.88 ms (noise; still ≪ 16.67 ms) |
+| SpatialGrid 50k bbox / kNN p50 | 2.47 / 0.09 ms | 6.34 / 0.11 ms |
+| `npx tsc --noEmit` | **0 errors** | 0 errors |
+| SWR list/snapshot | 1 HTTP call for N in-flight + TTL hits | uncached |
+| Live HUD Arrow scrub (`data-testid="scrub-query-ms"`) | **0.10 ms** | was DuckDB 176 ms on every hour |
+| Live HUD DuckDB ingest across 3 playbar scrubs | **76 ms then unchanged** | ingest re-ran every `queryHour` |
+| Headless `?gpu=1` Deck.gl `deck:` errors | **none** after GeoJSON LoD empty-set | SolidPolygonLayer `id` crash on lod 0 |
+| TwinCanvas non-black pixel fraction | **0.79** | software twin still paints |
 
-| Probe | After |
-| --- | ---: |
-| Instance pack count | |
-| Instance hour-slice p50 | |
-| Arrow `queryHourColumns` 12k rows p50 | |
-| Arrow `queryHourColumns` 12k rows p95 | |
-| Neon centroid bbox `SELECT` | |
-| Neon timestamp aggregate | |
-| `npx tsc --noEmit` | |
+The 5 ms frame-budget requirement is met by Arrow columns (**0.11 ms p50** on 12k rows; **0.10 ms** in Chrome), not by DuckDB-WASM SQL. Instance scrub is a typed-array view (**< 1 µs**). Packing 20,480 × 24 colour/elevation buffers takes **150 ms** once per policy/cache identity, not per frame. DuckDB-WASM remains on Worker `aeris-duckdb` for ingest/knapsack; three successive hour scrubs left the ingest readout at **76 ms**.
 
 ---
 
