@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Building2, Command, Layers, ThermometerSun, Wind, Zap } from "lucide-react";
+import { Building2, Command, Database, Layers, MapPin, ThermometerSun, Wind, Zap } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { POLICY_PRESETS, STRESS_SCENARIOS, type StressScenarioId } from "@/lib/scenarios";
 import { isTypingTarget } from "@/lib/hud";
@@ -12,7 +12,7 @@ type PaletteItem = {
   group: string;
   label: string;
   hint?: string;
-  icon: "building" | "policy" | "layer" | "scenario";
+  icon: "building" | "policy" | "layer" | "scenario" | "street" | "snapshot";
   run: () => void;
 };
 
@@ -27,6 +27,8 @@ export function CommandPalette() {
     hudLayers,
     setHudLayer,
     applyScenario,
+    savedRuns,
+    loadSimulation,
   } = sim;
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +63,35 @@ export function CommandPalette() {
       "pei ho st tong lau": ["Pei Ho St Tong Lau Block A", "北河街唐樓 A座"],
       "temple street night market": ["Temple St Night Market", "廟街夜市"],
     };
+    const STREET_QUERIES = [
+      { q: ["pei ho", "北河"], street: "Pei Ho Street" },
+      { q: ["fuk wa", "福華"], street: "Fuk Wa Street" },
+      { q: ["apliu", "鴨寮"], street: "Apliu Street" },
+      { q: ["shanghai", "上海"], street: "Shanghai Street" },
+    ];
+    const streetItems: PaletteItem[] = STREET_QUERIES.map((row) => {
+      const first = buildings.find((b) => b.properties.streetEn === row.street);
+      return {
+        id: `street-${row.street}`,
+        group: "Streets",
+        label: row.street,
+        hint: first?.properties.nameZh,
+        icon: "street" as const,
+        run: () => {
+          if (first) focusBuilding(first.properties.id);
+        },
+      };
+    });
+    const snapshotItems: PaletteItem[] = savedRuns.map((run) => ({
+      id: `sim-${run.id}`,
+      group: "DB snapshots",
+      label: run.scenario_name,
+      hint: `${run.id.slice(0, 8)} · ${new Date(run.created_at).toISOString().slice(0, 16)}`,
+      icon: "snapshot" as const,
+      run: () => {
+        void loadSimulation(run.id);
+      },
+    }));
     const buildingItems: PaletteItem[] = buildings.map((b) => ({
       id: `b-${b.properties.id}`,
       group: "Buildings",
@@ -102,6 +133,13 @@ export function CommandPalette() {
         icon: "layer",
         run: () => setHudLayer("buildingWireframes", !hudLayers.buildingWireframes),
       },
+      {
+        id: "layer-h3",
+        group: "Layers",
+        label: hudLayers.h3Hexes ? "Hide H3 hex gradient" : "Show H3 hex gradient",
+        icon: "layer",
+        run: () => setHudLayer("h3Hexes", !hudLayers.h3Hexes),
+      },
     ];
     const scenarioItems: PaletteItem[] = STRESS_SCENARIOS.map((s) => ({
       id: `s-${s.id}`,
@@ -111,7 +149,7 @@ export function CommandPalette() {
       icon: "scenario",
       run: () => applyScenario(s.id as StressScenarioId),
     }));
-    const all = [...buildingItems, ...policyItems, ...layerItems, ...scenarioItems];
+    const all = [...streetItems, ...buildingItems, ...policyItems, ...layerItems, ...scenarioItems, ...snapshotItems];
     const q = query.trim().toLowerCase();
     if (!q) return all.slice(0, 18);
     return all
@@ -120,10 +158,10 @@ export function CommandPalette() {
         if (blob.includes(q)) return true;
         return Object.entries(aliases).some(
           ([key, extra]) => extra.some((a) => a.toLowerCase().includes(q) || q.includes(a.toLowerCase())) && blob.includes(key),
-        );
+        ) || STREET_QUERIES.some((row) => row.q.some((alias) => alias.includes(q) || q.includes(alias)) && item.label.toLowerCase().includes(row.street.toLowerCase()));
       })
       .slice(0, 24);
-  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario]);
+  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario, savedRuns, loadSimulation]);
 
   return (
     <AnimatePresence>
@@ -175,6 +213,10 @@ export function CommandPalette() {
                       <Building2 className="h-3.5 w-3.5 text-cyan-300" />
                     ) : item.icon === "policy" ? (
                       <ThermometerSun className="h-3.5 w-3.5 text-amber-300" />
+                    ) : item.icon === "street" ? (
+                      <MapPin className="h-3.5 w-3.5 text-emerald-300" />
+                    ) : item.icon === "snapshot" ? (
+                      <Database className="h-3.5 w-3.5 text-violet-300" />
                     ) : item.icon === "layer" ? (
                       item.label.toLowerCase().includes("wind") ? (
                         <Wind className="h-3.5 w-3.5 text-sky-300" />

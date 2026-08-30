@@ -162,6 +162,20 @@ export interface BuildingHourState {
   canyonShadowed: boolean;
   /** Indoor wet-bulb after AC-grid / blackout forcing. */
   indoorWetBulbC: number;
+  /** ISO 7730 Fanger predicted mean vote (−3…+3). */
+  pmv: number;
+  /** ISO 7730 predicted percentage dissatisfied (5–100). */
+  ppd: number;
+  /** Extra indoor °C from the 劏房 4-hour concrete thermal battery. */
+  thermalBatteryC: number;
+  /** Indoor − outdoor WBGT differential (°C). */
+  wbgtDifferentialC: number;
+  /** Catchment-weighted Cat 1 (resuscitation) contribution this hour. */
+  aeSurgeCat1: number;
+  /** Catchment-weighted Cat 2 (emergency) contribution this hour. */
+  aeSurgeCat2: number;
+  /** Catchment-weighted Cat 3 (urgent) contribution this hour. */
+  aeSurgeCat3: number;
 }
 
 export interface TriageMix {

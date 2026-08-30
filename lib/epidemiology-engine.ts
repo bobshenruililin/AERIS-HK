@@ -27,6 +27,16 @@ import type { HkoDiurnalEnvelope } from "./hko/types";
 import { sampleHkoEnvelope } from "./hko/envelope";
 import type { HaNowcast } from "./ha/types";
 import { DEFAULT_PHYSICS_FORCING, type PhysicsForcing } from "./physics-forcing";
+import {
+  applySubdividedFlatThermalLag,
+  BATTERY_CHARGE_HOUR,
+  fangerPmvPpd,
+  metFromGaggeWm2,
+  ppdArrivalMultiplier,
+  solveWbgtDifferential,
+  summerClo,
+  wbgtSpreadC,
+} from "./biophysics";
 
 const STEFAN_LINEAR_HR = 4.7;
 const LEWIS_RATIO = 16.5;
@@ -139,7 +149,7 @@ function nightShelterRelief(hour: number, policy: PolicyState): number {
   return (policy.coolingShelters / 30) * 0.46 * clamp(night, 0, 1);
 }
 
-export function indoorAirTemp(
+function indoorAirTempLive(
   hour: number,
   building: BuildingFeature,
   policy: PolicyState,
@@ -166,6 +176,23 @@ export function indoorAirTemp(
     3.2 * mix +
     1.4 * building.properties.ventilationBlockage * mix;
   return lerp(shelteredMix, uncooled, mix);
+}
+
+export function indoorAirTemp(
+  hour: number,
+  building: BuildingFeature,
+  policy: PolicyState,
+  envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+): number {
+  const live = indoorAirTempLive(hour, building, policy, envelope, forcing);
+  const charge = indoorAirTempLive(BATTERY_CHARGE_HOUR, building, policy, envelope, forcing);
+  return applySubdividedFlatThermalLag(
+    hour,
+    live,
+    charge,
+    building.properties.subdividedFlatDensity,
+  ).indoorC;
 }
 
 function globeTemp(
@@ -294,10 +321,17 @@ export function evaluateBuildingAtHour(
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
 ): BuildingHourState {
   const outdoorTa = canyonAirTemp(hour, building, policy, envelope, forcing);
-  const indoorTa = indoorAirTemp(hour, building, policy, envelope, forcing);
+  const indoorLive = indoorAirTempLive(hour, building, policy, envelope, forcing);
+  const chargeIndoor = indoorAirTempLive(BATTERY_CHARGE_HOUR, building, policy, envelope, forcing);
+  const lagged = applySubdividedFlatThermalLag(
+    hour,
+    indoorLive,
+    chargeIndoor,
+    building.properties.subdividedFlatDensity,
+  );
+  const indoorTa = lagged.indoorC;
   const rh = relativeHumidity(hour, envelope, forcing);
-  const twOut = stullWetBulb(outdoorTa, rh);
-  const twIn = stullWetBulb(indoorTa, Math.min(0.92, rh + 0.04));
+  const indoorRh = Math.min(0.92, rh + 0.04);
   const { hw, svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
   const insol = canyonInsolation({
     hourHkt: hour,
@@ -313,17 +347,28 @@ export function evaluateBuildingAtHour(
     forcing.cloudCover,
   );
   const tgIn = globeTemp(indoorTa, hour, 0.85, insol.directBeamFrac, forcing.cloudCover);
-  const canyonWbgt = wbgtOutdoor(outdoorTa, twOut, tgOut);
-  const indoorWbgt = wbgtIndoor(indoorTa, twIn, tgIn);
+  const outdoorWbgt = solveWbgtDifferential({ ta: outdoorTa, rhFrac: rh, tg: tgOut, indoor: false });
+  const indoorSolved = solveWbgtDifferential({ ta: indoorTa, rhFrac: indoorRh, tg: tgIn, indoor: true });
+  const canyonWbgt = outdoorWbgt.wbgt;
+  const indoorWbgt = indoorSolved.wbgt;
+  const twIn = indoorSolved.tw;
   const microWbgt = 0.68 * indoorWbgt + 0.32 * canyonWbgt;
   const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa, envelope, forcing);
+  const fanger = fangerPmvPpd({
+    airTempC: indoorTa,
+    meanRadiantC: tgIn,
+    airVelocityMs: gagge.airVelocityMs,
+    rhFrac: indoorRh,
+    met: metFromGaggeWm2(gagge.metabolicRate),
+    clo: summerClo(hour),
+  });
   const cvi = buildingCardiovascularIndex(microWbgt, building, policy, forcing);
   const coolRoof = localCoolRoofFraction(building, policy) >= 0.99;
   const roofAbsorbed =
     forcing.cloudCover > 0
       ? roofAbsorbedWithCloudWm2(hour, coolRoof, forcing.cloudCover)
       : roofAbsorbedShortwaveWm2(hour, coolRoof);
-  return {
+  const partial: BuildingHourState = {
     buildingId: building.properties.id,
     hour: wrapHour(hour),
     outdoorTa,
@@ -336,7 +381,7 @@ export function evaluateBuildingAtHour(
     cvi,
     cviTier: classifyCvi(cvi),
     gagge,
-    thermalLagHours: thermalLagHours(building, policy, forcing),
+    thermalLagHours: thermalLagHours(building, policy, forcing) + 4 * building.properties.subdividedFlatDensity,
     cardiovascularStrain: bishaiCardiovascularStrain(microWbgt, gagge.coreTempC, building, policy),
     skyViewFactor: svf,
     canyonAspect: hw,
@@ -346,6 +391,20 @@ export function evaluateBuildingAtHour(
     canyonDirectBeamFrac: insol.directBeamFrac,
     canyonShadowed: insol.shadowed,
     indoorWetBulbC: twIn,
+    pmv: fanger.pmv,
+    ppd: fanger.ppd,
+    thermalBatteryC: lagged.batteryC,
+    wbgtDifferentialC: wbgtSpreadC(canyonWbgt, indoorWbgt),
+    aeSurgeCat1: 0,
+    aeSurgeCat2: 0,
+    aeSurgeCat3: 0,
+  };
+  const mix = buildingProjectedAeSurge(building, partial, policy);
+  return {
+    ...partial,
+    aeSurgeCat1: mix.category1,
+    aeSurgeCat2: mix.category2,
+    aeSurgeCat3: mix.category3,
   };
 }
 
@@ -379,6 +438,13 @@ function interpolateBuildingState(
     canyonDirectBeamFrac: mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1),
     canyonShadowed: mix(a.canyonDirectBeamFrac ?? 1, b.canyonDirectBeamFrac ?? 1) < 0.5,
     indoorWetBulbC: mix(a.indoorWetBulbC ?? a.wetBulbTemp, b.indoorWetBulbC ?? b.wetBulbTemp),
+    pmv: mix(a.pmv ?? 0, b.pmv ?? 0),
+    ppd: mix(a.ppd ?? 0, b.ppd ?? 0),
+    thermalBatteryC: mix(a.thermalBatteryC ?? 0, b.thermalBatteryC ?? 0),
+    wbgtDifferentialC: mix(a.wbgtDifferentialC ?? 0, b.wbgtDifferentialC ?? 0),
+    aeSurgeCat1: mix(a.aeSurgeCat1 ?? 0, b.aeSurgeCat1 ?? 0),
+    aeSurgeCat2: mix(a.aeSurgeCat2 ?? 0, b.aeSurgeCat2 ?? 0),
+    aeSurgeCat3: mix(a.aeSurgeCat3 ?? 0, b.aeSurgeCat3 ?? 0),
     gagge: {
       metabolicRate: mix(a.gagge.metabolicRate, b.gagge.metabolicRate),
       externalWork: mix(a.gagge.externalWork, b.gagge.externalWork),
@@ -481,7 +547,7 @@ export function hourlyArrivalsForBuilding(
 ): number {
   const baseline = (building.properties.baselineCVDPrevalence / 1000) * building.properties.estimatedResidents;
   const perHour = baseline / 24;
-  return perHour * diurnalEdFactor(state.hour) * heatRelativeRisk(state, building, policy);
+  return perHour * diurnalEdFactor(state.hour) * heatRelativeRisk(state, building, policy) * ppdArrivalMultiplier(state.ppd ?? 0);
 }
 
 function splitTriage(total: number, cviMean: number): TriageMix {
@@ -730,6 +796,14 @@ export function catchmentWeightedArrivals(
     weighted += arrivals * spec.catchmentWeight[building.properties.district];
   }
   return weighted;
+}
+
+export function buildingProjectedAeSurge(
+  building: BuildingFeature,
+  state: BuildingHourState,
+  policy: PolicyState,
+): TriageMix {
+  return splitTriage(catchmentWeightedArrivals(building, state, policy), state.cvi);
 }
 
 export function buildingClusterLoad24h(

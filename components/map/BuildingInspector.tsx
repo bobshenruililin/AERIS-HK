@@ -56,9 +56,9 @@ export function BuildingInspector() {
     : undefined;
 
   const tabs: Array<{ id: InspectorTab; label: string }> = [
-    { id: "biophysics", label: "Biophysics" },
-    { id: "demographics", label: "Demographics" },
-    { id: "surge", label: "Inpatient surge" },
+    { id: "biophysics", label: "Thermal Infiltration" },
+    { id: "demographics", label: "Demographic Risk" },
+    { id: "surge", label: "Projected A&E Surge Contribution" },
   ];
 
   return (
@@ -130,6 +130,14 @@ export function BuildingInspector() {
               <Stat label="Roof SW" value={`${state.roofAbsorbedWm2.toFixed(0)} W/m²`} />
               <Stat label="Solar el." value={`${state.solarElevationDeg.toFixed(1)}°`} />
               <Stat label="Azimuth" value={`${state.solarAzimuthDeg.toFixed(0)}°`} />
+              <Stat label="PMV" value={state.pmv.toFixed(2)} warn={state.pmv >= 1.5} />
+              <Stat label="PPD" value={`${state.ppd.toFixed(0)}%`} warn={state.ppd >= 40} />
+              <Stat
+                label="Battery ΔT"
+                value={`${state.thermalBatteryC >= 0 ? "+" : ""}${state.thermalBatteryC.toFixed(2)}°C`}
+                warn={state.thermalBatteryC >= 1.5}
+              />
+              <Stat label="WBGT Δ" value={`${state.wbgtDifferentialC.toFixed(1)}°C`} />
               <Stat
                 label="Canyon beam"
                 value={`${(state.canyonDirectBeamFrac * 100).toFixed(0)}%`}
@@ -160,6 +168,9 @@ export function BuildingInspector() {
             <Stat label="Target rank" value={rank ? `#${rank}` : "—"} />
             <Stat label="Cool roof" value={targeted ? "LOCKED" : "—"} warn={targeted} />
             <Stat label="Lag" value={`${state.thermalLagHours.toFixed(2)} h`} />
+            <Stat label="Cat 1 resus." value={state.aeSurgeCat1.toFixed(3)} warn={state.aeSurgeCat1 >= 0.05} />
+            <Stat label="Cat 2 emerg." value={state.aeSurgeCat2.toFixed(3)} />
+            <Stat label="Cat 3 urgent" value={state.aeSurgeCat3.toFixed(3)} />
             {candidate ? (
               <div className="col-span-2 font-mono text-[10px] text-amber-100/80">
                 Local averted {candidate.admissionsAverted.toFixed(3)} / 24h · η {candidate.efficiency.toExponential(2)} per m²

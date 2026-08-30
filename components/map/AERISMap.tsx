@@ -9,6 +9,7 @@ import {
   LightingEffect,
 } from "@deck.gl/core";
 import { ArcLayer, ColumnLayer, GeoJsonLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { H3HexagonLayer } from "@deck.gl/geo-layers";
 import type { MapViewState, PickingInfo } from "@deck.gl/core";
 import { Map as MapLibreMap } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -29,6 +30,15 @@ import type { BuildingFeature, BuildingFeatureCollection, BuildingProperties, Ho
 import { buildingCentroid } from "@/lib/spatial-data";
 import { streetSpinesFromBuildings } from "@/lib/streets";
 import { isDaylight, solarElevationDeg, sunDirectionVec } from "@/lib/solar";
+import { aggregateHeatPlumes } from "@/lib/h3-index";
+import {
+  acPulseFromHour,
+  packedAcWattsAt,
+  packedColorAt,
+  packedElevationAt,
+  packDiurnalGpuAttributes,
+} from "@/lib/gpu-attributes";
+import { ThermalShimmerExtension } from "@/lib/thermal-shimmer-extension";
 
 interface PlumeRow {
   id: string;
@@ -65,6 +75,7 @@ export default function AERISMap() {
     hudLayers,
     forcing,
     setInspectorAnchor,
+    cache,
   } = useSimulation();
   const [viewState, setViewState] = useState<MapViewState>({ ...HARBOUR_APPROACH_VIEW });
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
@@ -99,6 +110,13 @@ export default function AERISMap() {
   );
 
   const spines = useMemo(() => streetSpinesFromBuildings(buildings), [buildings]);
+  const hourFloor = Math.floor(hour) % 24;
+  const gpuPack = useMemo(() => packDiurnalGpuAttributes(buildings, cache), [buildings, cache]);
+  const shimmerExtension = useMemo(() => new ThermalShimmerExtension(), []);
+  const hexes = useMemo(
+    () => (hudLayers.h3Hexes ? aggregateHeatPlumes(buildings, snapshot.buildings, 10) : []),
+    [buildings, snapshot.buildings, hudLayers.h3Hexes],
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -214,6 +232,23 @@ export default function AERISMap() {
         capRounded: true,
         jointRounded: true,
       }),
+      new H3HexagonLayer({
+        id: "h3-microclimate",
+        data: hexes,
+        extruded: true,
+        coverage: 0.92,
+        pickable: false,
+        opacity: 0.55,
+        getHexagon: (d) => d.hex,
+        getFillColor: (d) => [d.color[0], d.color[1], d.color[2], 110],
+        getElevation: (d) => d.elevation,
+        elevationScale: 1,
+        visible: hudLayers.h3Hexes,
+        updateTriggers: {
+          getFillColor: hourFloor,
+          getElevation: hourFloor,
+        },
+      }),
       new GeoJsonLayer<BuildingProperties>({
         id: "aeris-buildings",
         data: collection,
@@ -222,8 +257,8 @@ export default function AERISMap() {
         wireframe: true,
         pickable: true,
         opacity: hudLayers.buildingWireframes ? 0.35 : 0.96,
-        getElevation: (f) => f.properties.height * EXTRUSION_SCALE,
-        getFillColor: (f) => cviColor(cviById.get(f.properties.id) ?? 0),
+        getElevation: (f) => packedElevationAt(gpuPack, f.properties.id, hourFloor),
+        getFillColor: (f) => packedColorAt(gpuPack, f.properties.id, hourFloor),
         getLineColor: (f) =>
           f.properties.id === highlightId
             ? CVI_HOVER_LINE
@@ -239,12 +274,17 @@ export default function AERISMap() {
           shininess: 48,
           specularColor: [120, 230, 255],
         },
+        extensions: hudLayers.thermalShimmer ? [shimmerExtension] : [],
         updateTriggers: {
-          getFillColor: snapshot.hour,
+          getFillColor: hourFloor,
+          getElevation: hourFloor,
+          getAcWatts: hourFloor,
           getLineColor: `${highlightId}:${policy.coolRoofTargetIds.join(",")}`,
           getLineWidth: `${highlightId}:${policy.coolRoofTargetIds.join(",")}`,
         },
-      }),
+        acPulse: acPulseFromHour(hour, hudLayers.thermalShimmer),
+        getAcWatts: (f: { properties: BuildingProperties }) => packedAcWattsAt(gpuPack, f.properties.id, hourFloor),
+      } as ConstructorParameters<typeof GeoJsonLayer<BuildingProperties>>[0]),
       new ColumnLayer<PlumeRow>({
         id: "cvi-heat-plumes",
         data: hudLayers.thermalShimmer ? plumes : [],
@@ -325,6 +365,10 @@ export default function AERISMap() {
     ];
   }, [
     collection,
+    gpuPack,
+    hourFloor,
+    hexes,
+    shimmerExtension,
     cviById,
     snapshot.hour,
     hour,

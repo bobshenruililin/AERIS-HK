@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    serverComponentsExternalPackages: ["pg"],
-  },
+    experimental: {
+      serverComponentsExternalPackages: ["pg", "@neondatabase/serverless", "ws"],
+    },
   transpilePackages: [
     "@deck.gl/core",
     "@deck.gl/react",
@@ -46,6 +46,8 @@ const nextConfig = {
         ...config.resolve.alias,
         pg: false,
         "pg-native": false,
+        "@neondatabase/serverless": false,
+        ws: false,
       };
     }
     return config;

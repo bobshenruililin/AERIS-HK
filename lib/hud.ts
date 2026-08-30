@@ -14,12 +14,14 @@ export interface HudLayers {
   windVectors: boolean;
   thermalShimmer: boolean;
   buildingWireframes: boolean;
+  h3Hexes: boolean;
 }
 
 export const DEFAULT_HUD_LAYERS: HudLayers = {
   windVectors: true,
   thermalShimmer: true,
   buildingWireframes: false,
+  h3Hexes: true,
 };
 
 export interface HudPresetSpec {
@@ -47,7 +49,7 @@ export const HUD_PRESETS: Record<HudPresetId, HudPresetSpec> = {
       decade: "pill",
       inspector: "compact",
     },
-    layers: { windVectors: false, thermalShimmer: true, buildingWireframes: false },
+    layers: { windVectors: false, thermalShimmer: true, buildingWireframes: false, h3Hexes: true },
     briefing: false,
     shortcut: "1",
   },
@@ -64,7 +66,7 @@ export const HUD_PRESETS: Record<HudPresetId, HudPresetSpec> = {
       decade: "pill",
       inspector: "expanded",
     },
-    layers: { windVectors: true, thermalShimmer: true, buildingWireframes: true },
+    layers: { windVectors: true, thermalShimmer: true, buildingWireframes: true, h3Hexes: true },
     briefing: false,
     shortcut: "2",
   },
@@ -81,7 +83,7 @@ export const HUD_PRESETS: Record<HudPresetId, HudPresetSpec> = {
       decade: "expanded",
       inspector: "compact",
     },
-    layers: { windVectors: false, thermalShimmer: true, buildingWireframes: false },
+    layers: { windVectors: false, thermalShimmer: true, buildingWireframes: false, h3Hexes: false },
     briefing: false,
     shortcut: "3",
   },
@@ -98,7 +100,7 @@ export const HUD_PRESETS: Record<HudPresetId, HudPresetSpec> = {
       decade: "pill",
       inspector: "compact",
     },
-    layers: { windVectors: false, thermalShimmer: false, buildingWireframes: false },
+    layers: { windVectors: false, thermalShimmer: false, buildingWireframes: false, h3Hexes: false },
     briefing: true,
     shortcut: "4",
   },

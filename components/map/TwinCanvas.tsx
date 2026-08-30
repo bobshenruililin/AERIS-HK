@@ -8,6 +8,7 @@ import { HOSPITALS } from "@/lib/hospitals";
 import { isDaylight, solarElevationDeg, sunDirectionVec } from "@/lib/solar";
 import { streetSpinesFromBuildings } from "@/lib/streets";
 import { buildingCentroid } from "@/lib/spatial-data";
+import { aggregateHeatPlumes } from "@/lib/h3-index";
 import type { BuildingFeature, HospitalCode, SystemHourSnapshot } from "@/lib/types";
 import type { HudLayers } from "@/lib/hud";
 import { advectWindParticles, createWindParticles, type WindParticle } from "@/lib/wind-field";
@@ -366,6 +367,15 @@ function drawFrame(
     basis,
   );
   fillPoly(ctx, land, day ? "rgba(12, 18, 28, 0.96)" : "rgba(8, 12, 20, 0.97)", "rgba(15,23,42,0.8)", 1);
+
+  if (args.layers.h3Hexes) {
+    const hexes = aggregateHeatPlumes(args.buildings, args.snapshot.buildings, 10);
+    for (const cell of hexes) {
+      const ring = cell.boundary.map(([lon, lat]) => wgs84ToEnu(lon, lat, 1.4));
+      const projected = projectRing(ring, view, w, h, basis);
+      fillPoly(ctx, projected, rgba(cell.color, 0.2), rgba(cell.color, 0.55), 1.1 * dpr);
+    }
+  }
 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";

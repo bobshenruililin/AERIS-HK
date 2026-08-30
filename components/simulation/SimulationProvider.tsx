@@ -64,6 +64,16 @@ import type { MonteCarloResult } from "@/lib/monte-carlo";
 import { runMonteCarloAsync } from "@/lib/monte-carlo-client";
 import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
 import { buildingCentroid } from "@/lib/spatial-data";
+import type { SimulationRunDto } from "@/lib/db/types";
+import { clusterMetricsFromSnapshot } from "@/lib/db/metrics";
+import {
+  fetchSimulationList,
+  fetchSimulationSnapshot,
+  postSimulation,
+  readSimQueryParam,
+  replaceSimQueryParam,
+} from "@/lib/simulations-client";
+import { sampleHkoEnvelope } from "@/lib/hko/envelope";
 
 interface SimulationContextValue {
   buildings: BuildingFeature[];
@@ -118,6 +128,11 @@ interface SimulationContextValue {
   monteCarlo: MonteCarloResult | null;
   monteCarloRunning: boolean;
   focusBuilding: (id: string) => void;
+  simId: string | null;
+  savedRuns: SimulationRunDto[];
+  saveSimulation: () => Promise<string | null>;
+  loadSimulation: (id: string) => Promise<boolean>;
+  simulationSaving: boolean;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
@@ -205,6 +220,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [scenarioId, setScenarioId] = useState<StressScenarioId | null>(null);
   const [monteCarlo, setMonteCarlo] = useState<MonteCarloResult | null>(null);
   const [monteCarloRunning, setMonteCarloRunning] = useState(false);
+  const [simId, setSimId] = useState<string | null>(null);
+  const [savedRuns, setSavedRuns] = useState<SimulationRunDto[]>([]);
+  const [simulationSaving, setSimulationSaving] = useState(false);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
   const budgetTouched = useRef(false);
@@ -508,6 +526,117 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     [buildings],
   );
 
+  const saveSimulation = useCallback(async (): Promise<string | null> => {
+    setSimulationSaving(true);
+    try {
+      const hourly = Array.from({ length: 24 }, (_, h) =>
+        clusterMetricsFromSnapshot(
+          evaluateSystemAtHour(h, policy, buildings, cache, forcedEnvelope, haNowcast, forcing),
+        ),
+      ).flat();
+      const ambient = forcedEnvelope
+        ? sampleHkoEnvelope(forcedEnvelope, 15).airTempC
+        : snapshot.buildings.reduce((s, b) => s + b.outdoorTa, 0) / Math.max(1, snapshot.buildings.length);
+      const rh = forcedEnvelope ? sampleHkoEnvelope(forcedEnvelope, 15).rhFrac : 0.72;
+      const wind =
+        snapshot.buildings.reduce((s, b) => s + b.gagge.airVelocityMs, 0) / Math.max(1, snapshot.buildings.length);
+      const scenarioName =
+        (scenarioId ? scenarioById(scenarioId)?.nameEn : null) ??
+        episodeById(episodeId)?.nameEn ??
+        "Live HKO twin";
+      const posted = await postSimulation({
+        scenario_name: scenarioName,
+        ambient_temp_c: ambient,
+        relative_humidity: rh,
+        wind_speed_ms: wind,
+        ac_failure_rate: forcing.acGridFailure,
+        policy_modifiers: {
+          policy,
+          scenarioId,
+          episodeId,
+          hour,
+          speed,
+          hudPreset,
+          forcing: { ...forcing },
+        },
+        total_averted_ed_visits: impact.admissionsAverted,
+        hourly,
+      });
+      if (!posted) return null;
+      setSimId(posted.id);
+      replaceSimQueryParam(posted.id);
+      const listed = await fetchSimulationList();
+      setSavedRuns(listed.runs);
+      return posted.id;
+    } finally {
+      setSimulationSaving(false);
+    }
+  }, [
+    policy,
+    buildings,
+    cache,
+    forcedEnvelope,
+    haNowcast,
+    forcing,
+    snapshot.buildings,
+    scenarioId,
+    episodeId,
+    hour,
+    speed,
+    hudPreset,
+    impact.admissionsAverted,
+  ]);
+
+  const loadSimulation = useCallback(async (id: string): Promise<boolean> => {
+    const snap = await fetchSimulationSnapshot(id);
+    if (!snap) return false;
+    const mods = snap.policy_modifiers;
+    if (mods?.policy) {
+      setPolicyState({ ...DEFAULT_POLICY, ...mods.policy });
+    }
+    setScenarioId(mods?.scenarioId ?? null);
+    if (mods?.episodeId) setEpisodeId(mods.episodeId);
+    if (typeof mods?.hour === "number") {
+      userScrubbed.current = true;
+      pinnedToNow.current = false;
+      setHourState(wrapHour(mods.hour));
+    }
+    if (mods?.speed) setSpeed(mods.speed);
+    if (mods?.hudPreset) {
+      setHudPresetState(mods.hudPreset);
+      setHudLayers(HUD_PRESETS[mods.hudPreset].layers);
+    }
+    setSimId(snap.id);
+    replaceSimQueryParam(snap.id);
+    return true;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSimulationList().then((payload) => {
+      if (!cancelled) setSavedRuns(payload.runs ?? []);
+    });
+    const fromUrl = readSimQueryParam();
+    if (fromUrl) {
+      void fetchSimulationSnapshot(fromUrl).then((snap) => {
+        if (cancelled || !snap) return;
+        const mods = snap.policy_modifiers;
+        if (mods?.policy) setPolicyState({ ...DEFAULT_POLICY, ...mods.policy });
+        setScenarioId(mods?.scenarioId ?? null);
+        if (mods?.episodeId) setEpisodeId(mods.episodeId);
+        if (typeof mods?.hour === "number") {
+          userScrubbed.current = true;
+          pinnedToNow.current = false;
+          setHourState(wrapHour(mods.hour));
+        }
+        setSimId(snap.id);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     setMonteCarloRunning(true);
@@ -595,6 +724,11 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       monteCarlo,
       monteCarloRunning,
       focusBuilding,
+      simId,
+      savedRuns,
+      saveSimulation,
+      loadSimulation,
+      simulationSaving,
     }),
     [
       buildings,
@@ -640,6 +774,11 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       monteCarlo,
       monteCarloRunning,
       focusBuilding,
+      simId,
+      savedRuns,
+      saveSimulation,
+      loadSimulation,
+      simulationSaving,
     ],
   );
 
