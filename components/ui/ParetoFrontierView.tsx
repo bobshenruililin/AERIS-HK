@@ -107,6 +107,11 @@ function ChartSvg({
           />
         </>
       )}
+      {mode === "3d" ? (
+        <text x={pad.l + 200} y={H - pad.b - 32} fill="rgb(148,163,184)" fontSize="8">
+          ΔGini
+        </text>
+      ) : null}
       {polyline.length > 1 ? (
         <polyline
           points={polyline.join(" ")}
