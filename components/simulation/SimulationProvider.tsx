@@ -63,6 +63,12 @@ import {
 } from "@/lib/scenarios";
 import type { MonteCarloResult } from "@/lib/monte-carlo";
 import { runMonteCarloAsync } from "@/lib/monte-carlo-client";
+import {
+  NSGA2_GENERATIONS,
+  NSGA2_POPULATION,
+  type ParetoPoint,
+} from "@/lib/optimization";
+import { runParetoAsync } from "@/lib/optimization/pareto-client";
 import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
 import { measureSpatialIndex, spatialGridFromBuildings, type SpatialIndexStats } from "@/lib/spatial-grid";
 import type { SimulationRunDto } from "@/lib/db/types";
@@ -144,9 +150,28 @@ interface SimulationContextValue {
   setCopilotAmbientDeltaC: (delta: number) => void;
   copilotPanelOpen: boolean;
   setCopilotPanelOpen: (open: boolean) => void;
+  paretoFront: ParetoPoint[];
+  paretoRunning: boolean;
+  paretoGeneration: number;
+  selectedParetoId: string | null;
+  paretoEngine: string | null;
+  runParetoSolver: () => Promise<void>;
+  applyParetoPoint: (id: string) => void;
 }
 
 const SimulationContext = createContext<SimulationContextValue | null>(null);
+
+export interface ParetoSolverValue {
+  paretoFront: ParetoPoint[];
+  paretoRunning: boolean;
+  paretoGeneration: number;
+  selectedParetoId: string | null;
+  paretoEngine: string | null;
+  runParetoSolver: () => Promise<void>;
+  applyParetoPoint: (id: string) => void;
+}
+
+const ParetoSolverContext = createContext<ParetoSolverValue | null>(null);
 
 function seedSpatialMeta(count: number): SpatialSnapshotMeta {
   return { ...SYNTHETIC_SPATIAL_META, buildingCount: count };
@@ -237,6 +262,12 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [copilot, setCopilot] = useState<CopilotSpatialState>(EMPTY_COPILOT);
   const [copilotAmbientDeltaC, setCopilotAmbientDeltaC] = useState(0);
   const [copilotPanelOpen, setCopilotPanelOpen] = useState(false);
+  const [paretoFront, setParetoFront] = useState<ParetoPoint[]>([]);
+  const [paretoRunning, setParetoRunning] = useState(false);
+  const [paretoGeneration, setParetoGeneration] = useState(0);
+  const [selectedParetoId, setSelectedParetoId] = useState<string | null>(null);
+  const [paretoEngine, setParetoEngine] = useState<string | null>(null);
+  const paretoTokenRef = useRef(0);
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
   const budgetTouched = useRef(false);
@@ -377,7 +408,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       }),
     // Ranking is local-only: ignore budget, targets, and district percent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buildings, forcedEnvelope, policy.coolingShelters, policy.dhcOutreach, policy.acDeflectionBylaw],
+    [buildings, forcedEnvelope, policy.coolingShelters, policy.dhcOutreach, policy.acDeflectionBylaw, policy.canopyGreeneryPercent, policy.acEfficiencyGrantPct],
   );
 
   useEffect(() => {
@@ -710,7 +741,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
         acFailProbability: Math.max(0.08, forcing.acGridFailure),
         ozoneIndex: forcing.ozoneIndex,
         iterations: 1000,
-        seed: 20220719 + Math.round(policy.coolingShelters * 17 + policy.dhcOutreach),
+        seed: 20220719 + Math.round(policy.coolingShelters * 17 + policy.dhcOutreach + policy.canopyGreeneryPercent + policy.acEfficiencyGrantPct),
       }).then((result) => {
         if (!cancelled) {
           setMonteCarlo(result);
@@ -731,7 +762,80 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     policy.dhcOutreach,
     policy.coolRoofBudgetM2,
     policy.acDeflectionBylaw,
+    policy.canopyGreeneryPercent,
+    policy.acEfficiencyGrantPct,
   ]);
+
+  const runParetoSolver = useCallback(async () => {
+    const token = ++paretoTokenRef.current;
+    setParetoRunning(true);
+    setParetoGeneration(0);
+    try {
+      const result = await runParetoAsync(
+        {
+          buildings,
+          candidates: coolRoofCandidates,
+          totalRoofM2,
+          envelope: forcedEnvelope,
+          forcing,
+          anchorPolicy: policy,
+          generations: NSGA2_GENERATIONS,
+          populationSize: NSGA2_POPULATION,
+          seed: 20220719 + Math.round(policy.dhcOutreach * 13 + (policy.acDeflectionBylaw ? 7 : 0)),
+        },
+        (generation, front) => {
+          if (token !== paretoTokenRef.current) return;
+          setParetoGeneration(generation);
+          setParetoFront(front);
+        },
+      );
+      if (token !== paretoTokenRef.current) return;
+      setParetoFront(result.front);
+      setParetoGeneration(result.generations);
+      setParetoEngine(result.engine);
+    } finally {
+      if (token === paretoTokenRef.current) setParetoRunning(false);
+    }
+  }, [buildings, coolRoofCandidates, totalRoofM2, forcedEnvelope, forcing, policy]);
+
+  const applyParetoPoint = useCallback(
+    (id: string) => {
+      const point = paretoFront.find((row) => row.id === id);
+      if (!point) return;
+      setSelectedParetoId(id);
+      setPolicy({
+        coolingShelters: Math.round(point.levers.coolingShelters),
+        canopyGreeneryPercent: point.levers.canopyGreeneryPercent,
+        acEfficiencyGrantPct: point.levers.acEfficiencyGrantPct,
+        coolRoofBudgetM2: point.coolRoofBudgetM2,
+      });
+      setHudPresetState(3);
+      setDrawerOverride({});
+      setHudLayers(HUD_PRESETS[3].layers);
+    },
+    [paretoFront, setPolicy],
+  );
+
+  const paretoValue = useMemo<ParetoSolverValue>(
+    () => ({
+      paretoFront,
+      paretoRunning,
+      paretoGeneration,
+      selectedParetoId,
+      paretoEngine,
+      runParetoSolver,
+      applyParetoPoint,
+    }),
+    [
+      paretoFront,
+      paretoRunning,
+      paretoGeneration,
+      selectedParetoId,
+      paretoEngine,
+      runParetoSolver,
+      applyParetoPoint,
+    ],
+  );
 
   const value = useMemo<SimulationContextValue>(
     () => ({
@@ -800,6 +904,13 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       setCopilotAmbientDeltaC,
       copilotPanelOpen,
       setCopilotPanelOpen,
+      paretoFront,
+      paretoRunning,
+      paretoGeneration,
+      selectedParetoId,
+      paretoEngine,
+      runParetoSolver,
+      applyParetoPoint,
     }),
     [
       buildings,
@@ -855,16 +966,35 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       copilot,
       copilotAmbientDeltaC,
       copilotPanelOpen,
+      paretoFront,
+      paretoRunning,
+      paretoGeneration,
+      selectedParetoId,
+      paretoEngine,
+      runParetoSolver,
+      applyParetoPoint,
     ],
   );
 
-  return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;
+  return (
+    <SimulationContext.Provider value={value}>
+      <ParetoSolverContext.Provider value={paretoValue}>{children}</ParetoSolverContext.Provider>
+    </SimulationContext.Provider>
+  );
 }
 
 export function useSimulation(): SimulationContextValue {
   const ctx = useContext(SimulationContext);
   if (!ctx) {
     throw new Error("useSimulation must be used within SimulationProvider");
+  }
+  return ctx;
+}
+
+export function useParetoSolver(): ParetoSolverValue {
+  const ctx = useContext(ParetoSolverContext);
+  if (!ctx) {
+    throw new Error("useParetoSolver must be used within SimulationProvider");
   }
   return ctx;
 }

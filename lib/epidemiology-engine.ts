@@ -45,6 +45,23 @@ const LEWIS_RATIO = 16.5;
 const SKIN_WETTED_MAX = 0.85;
 const MET_RESTING = 58;
 
+/** Tong-lau / 劏房 blocks used by the thermal-inequity Gini. */
+export const TENEMENT_SUBDIVIDED_MIN = 0.4;
+
+export function policyCanopyFraction(policy: PolicyState): number {
+  return clamp((policy.canopyGreeneryPercent ?? 0) / 100, 0, 1);
+}
+
+/**
+ * COP-style reduction of rejector waste heat. Grants concentrate on subdivided
+ * stock: efficiency = 1 − 0.48·g·(0.35 + 0.65·ρ_sub).
+ */
+export function policyAcGrantEfficiency(building: BuildingFeature, policy: PolicyState): number {
+  const grant = clamp((policy.acEfficiencyGrantPct ?? 0) / 100, 0, 1);
+  const tenement = clamp(building.properties.subdividedFlatDensity, 0, 1);
+  return 1 - 0.48 * grant * (0.35 + 0.65 * tenement);
+}
+
 function satVaporKpa(tempC: number): number {
   return 0.6108 * Math.exp((17.27 * tempC) / (tempC + 237.3));
 }
@@ -108,7 +125,7 @@ function regionalAirTemp(hour: number, coolRoofPercent: number, envelope: HkoDiu
   return 29.2 - roofCool * 0.55 + (2.4 - roofCool * 0.45) * cosine;
 }
 
-function effectiveAcHeat(
+export function effectiveAcHeat(
   building: BuildingFeature,
   policy: PolicyState,
   hour = 15,
@@ -120,7 +137,8 @@ function effectiveAcHeat(
   const midnight = h >= 22 || h <= 4 ? 1 : 0;
   const rejector = 1 + forcing.midnightAcRejectorBoost * midnight;
   const failed = 1 - 0.72 * forcing.acGridFailure;
-  return building.properties.acAnthropogenicHeat * deflect * roof * rejector * failed;
+  const grant = policyAcGrantEfficiency(building, policy);
+  return building.properties.acAnthropogenicHeat * deflect * roof * rejector * failed * grant;
 }
 
 export function thermalLagHours(
@@ -133,7 +151,7 @@ export function thermalLagHours(
   return lerp(base, 0.22, forcing.acGridFailure);
 }
 
-function canyonAirTemp(
+export function canyonAirTemp(
   hour: number,
   building: BuildingFeature,
   policy: PolicyState,
@@ -143,11 +161,13 @@ function canyonAirTemp(
   const regional = regionalAirTemp(hour, policy.coolRoofPercent, envelope);
   const ac = effectiveAcHeat(building, policy, hour, forcing);
   const { svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
+  const canopy = policyCanopyFraction(policy);
   const canyon =
-    1.55 * building.properties.ventilationBlockage +
+    1.55 * building.properties.ventilationBlockage * (1 - 0.25 * canopy) +
     0.0145 * ac +
     0.9 * building.properties.subdividedFlatDensity +
-    0.95 * (1 - svf);
+    0.95 * (1 - svf) * (1 - 0.72 * canopy) -
+    0.55 * canopy;
   const flood = coastalFloodIndoorBoostC(building, forcing) * 0.28;
   return regional + canyon + flood;
 }
@@ -168,11 +188,13 @@ function indoorAirTempLive(
   const lag = thermalLagHours(building, policy, forcing);
   const laggedCanyon = canyonAirTemp(hour - lag, building, policy, envelope, forcing);
   const liveCanyon = canyonAirTemp(hour, building, policy, envelope, forcing);
+  const canopy = policyCanopyFraction(policy);
   const trap =
     2.55 * building.properties.subdividedFlatDensity +
     0.012 * effectiveAcHeat(building, policy, hour, forcing) +
-    0.85 * building.properties.ventilationBlockage -
-    1.8 * localCoolRoofFraction(building, policy);
+    0.85 * building.properties.ventilationBlockage * (1 - 0.25 * canopy) -
+    1.8 * localCoolRoofFraction(building, policy) -
+    0.85 * canopy;
   const mass = 0.38 + 0.52 * building.properties.subdividedFlatDensity;
   const fabric = mass * (laggedCanyon + trap * 0.42) + (1 - mass) * liveCanyon;
   const shelter = nightShelterRelief(hour, policy);
@@ -235,10 +257,11 @@ export function gaggeTwoNode(
   const nightMet = h >= 22 || h <= 6 ? 0.92 : 1.0;
   const M = MET_RESTING * elderlyMet * nightMet;
   const W = 0;
+  const canopy = policyCanopyFraction(policy);
   const vAir =
     0.12 +
     0.95 *
-      (1 - building.properties.ventilationBlockage) *
+      (1 - building.properties.ventilationBlockage * (1 - 0.25 * canopy)) *
       (0.4 + 0.6 * solarRadiationIndex(h)) *
       (0.35 + 0.65 * forcing.seaBreezeScale);
   const hc = convectiveCoefficient(vAir);
@@ -293,7 +316,10 @@ export function buildingCardiovascularIndex(
   const dhc = clamp(policy.dhcOutreach / 100, 0, 1);
   const elderly = building.properties.elderlyRatio * (1 - 0.34 * dhc);
   const density = building.properties.subdividedFlatDensity;
-  const blockage = building.properties.ventilationBlockage * (policy.acDeflectionBylaw ? 0.9 : 1);
+  const blockage =
+    building.properties.ventilationBlockage *
+    (policy.acDeflectionBylaw ? 0.9 : 1) *
+    (1 - 0.25 * policyCanopyFraction(policy));
   const ozone = 0.12 * forcing.ozoneIndex;
   const raw =
     0.35 * (microWbgt / 35) + 0.28 * density + 0.22 * elderly + 0.15 * blockage + ozone;
@@ -829,6 +855,113 @@ export function buildingProjectedAeSurge(
   policy: PolicyState,
 ): TriageMix {
   return splitTriage(catchmentWeightedArrivals(building, state, policy), state.cvi);
+}
+
+/**
+ * Fast Cat 1–3 / thermal sample used by NSGA-II. Same canyon, indoor lag,
+ * ISO 7243 WBGT, CVI, and Bishai strain as the HUD path. Skips Fanger PMV,
+ * astronomical insolation, and roof shortwave so 500 generations stay off the
+ * rAF / Arrow scrub thread. Core temperature uses the Gagge Tcr identity with
+ * storage S = 0 (resting equilibrium). Click-to-apply still runs the full
+ * `evaluateBuildingAtHour` cache.
+ */
+export interface BuildingCat13Lite {
+  outdoorTa: number;
+  indoorTa: number;
+  microWbgt: number;
+  cvi: number;
+  cardiovascularStrain: number;
+  cat13Arrivals: number;
+  acHeatWm2: number;
+}
+
+export function evaluateBuildingCat13Lite(
+  building: BuildingFeature,
+  hour: number,
+  policy: PolicyState,
+  envelope: HkoDiurnalEnvelope | null = null,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+): BuildingCat13Lite {
+  const outdoorTa = canyonAirTemp(hour, building, policy, envelope, forcing);
+  const indoorTa = indoorAirTemp(hour, building, policy, envelope, forcing);
+  const acHeatWm2 = effectiveAcHeat(building, policy, hour, forcing);
+  const rh = relativeHumidity(hour, envelope, forcing);
+  const canopy = policyCanopyFraction(policy);
+  const blockage = building.properties.ventilationBlockage * (1 - 0.25 * canopy);
+  const tgOut = globeTemp(outdoorTa, hour, blockage, 1, forcing.cloudCover);
+  const tgIn = globeTemp(indoorTa, hour, 0.85, 1, forcing.cloudCover);
+  const indoorRh = Math.min(0.99, rh + 0.04);
+  const canyonWbgt = solveWbgtDifferential({ ta: outdoorTa, rhFrac: rh, tg: tgOut, indoor: false }).wbgt;
+  const indoorWbgt = solveWbgtDifferential({ ta: indoorTa, rhFrac: indoorRh, tg: tgIn, indoor: true }).wbgt;
+  const microWbgt = 0.68 * indoorWbgt + 0.32 * canyonWbgt;
+  const cvi = buildingCardiovascularIndex(microWbgt, building, policy, forcing);
+  const coreTempC = 36.78 + 0.055 * Math.max(0, indoorTa - 28) + 0.012 * Math.max(0, outdoorTa - 32);
+  const cardiovascularStrain = bishaiCardiovascularStrain(microWbgt, coreTempC, building, policy);
+  const h = wrapHour(hour);
+  const stub: BuildingHourState = {
+    buildingId: building.properties.id,
+    hour: h,
+    outdoorTa,
+    indoorTa,
+    globeTemp: tgIn,
+    wetBulbTemp: indoorWbgt,
+    canyonWbgt,
+    indoorWbgt,
+    microWbgt,
+    cvi,
+    cviTier: classifyCvi(cvi),
+    gagge: {
+      metabolicRate: MET_RESTING,
+      externalWork: 0,
+      evaporativeLoss: 0,
+      radiativeLoss: 0,
+      convectiveLoss: 0,
+      heatStorage: 0,
+      skinTempC: 34,
+      coreTempC,
+      airVelocityMs: 0.12,
+    },
+    thermalLagHours: 0,
+    cardiovascularStrain,
+    skyViewFactor: 0,
+    canyonAspect: 0,
+    roofAbsorbedWm2: 0,
+    solarElevationDeg: 0,
+    solarAzimuthDeg: 0,
+    canyonDirectBeamFrac: 1,
+    canyonShadowed: false,
+    indoorWetBulbC: indoorWbgt,
+    pmv: 0,
+    ppd: 0,
+    thermalBatteryC: 0,
+    wbgtDifferentialC: indoorWbgt - canyonWbgt,
+    aeSurgeCat1: 0,
+    aeSurgeCat2: 0,
+    aeSurgeCat3: 0,
+  };
+  return {
+    outdoorTa,
+    indoorTa,
+    microWbgt,
+    cvi,
+    cardiovascularStrain,
+    cat13Arrivals: catchmentWeightedArrivals(building, stub, policy),
+    acHeatWm2,
+  };
+}
+
+/** Peak HVAC rejector load (MW) from effective AC waste heat × roof area. */
+export function peakHvacLoadMw(
+  buildings: BuildingFeature[],
+  policy: PolicyState,
+  hour = 15,
+  forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+): number {
+  let watts = 0;
+  for (const building of buildings) {
+    watts += effectiveAcHeat(building, policy, hour, forcing) * Math.max(0, building.properties.roofAreaM2);
+  }
+  return watts / 1e6;
 }
 
 export function buildingClusterLoad24h(

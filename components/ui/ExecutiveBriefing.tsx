@@ -252,6 +252,18 @@ export function ExecutiveBriefing() {
                     <td>{formatHkd(briefing.spend.ambulanceHkd)}</td>
                   </tr>
                   <tr>
+                    <td>Urban canopy ({(policy.canopyGreeneryPercent ?? 0).toFixed(0)}% × 92,000)</td>
+                    <td>{formatHkd(briefing.spend.canopyHkd)}</td>
+                  </tr>
+                  <tr>
+                    <td>AC grant municipal + household ({(policy.acEfficiencyGrantPct ?? 0).toFixed(0)}%)</td>
+                    <td>
+                      {formatHkd(
+                        briefing.spend.acGrantMunicipalHkd + briefing.spend.acGrantHouseholdHkd,
+                      )}
+                    </td>
+                  </tr>
+                  <tr>
                     <td>
                       <strong>Intervention spend</strong>
                     </td>

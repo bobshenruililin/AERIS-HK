@@ -121,6 +121,8 @@ describe("Neon live snapshot (optional)", () => {
           coolRoofBudgetM2: 0,
           coolRoofTargetIds: [],
           acDeflectionBylaw: false,
+          canopyGreeneryPercent: 0,
+          acEfficiencyGrantPct: 0,
         },
         scenarioId: "july-2022-heatwave",
         episodeId: "july-2022",

@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Crosshair, Globe2, Hexagon, Pause, Play, Share2, Sparkles, ThermometerSun, Wind } from "lucide-react";
+import { Box, Crosshair, GitBranch, Globe2, Hexagon, Pause, Play, Share2, Sparkles, ThermometerSun, Wind } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { HUD_PRESETS, type HudLayers, type HudPresetId } from "@/lib/hud";
 import { STRESS_SCENARIOS, type StressScenarioId } from "@/lib/scenarios";
@@ -33,6 +33,9 @@ export function ControlDock() {
     simulationSaving,
     simId,
     setCopilotPanelOpen,
+    runParetoSolver,
+    paretoRunning,
+    paretoGeneration,
   } = useSimulation();
 
   return (
@@ -80,6 +83,15 @@ export function ControlDock() {
           >
             <Sparkles className="h-3 w-3" />
             Copilot
+          </button>
+          <button
+            type="button"
+            data-testid="pareto-dock"
+            onClick={() => void runParetoSolver()}
+            className="ml-0.5 flex items-center gap-1 rounded-full px-2.5 py-1.5 font-mono text-[10px] text-emerald-100 hover:bg-emerald-400/15"
+          >
+            <GitBranch className="h-3 w-3" />
+            {paretoRunning ? `P ${paretoGeneration}` : "Pareto"}
           </button>
         </div>
       </div>

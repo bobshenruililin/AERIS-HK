@@ -2,6 +2,20 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.14.0] — 2026-08-30
+
+### Added
+
+- Multi-objective NSGA-II Pareto solver in `lib/optimization/`: 500 generations, population 32, four levers (cool-roof rebate %, urban canopy %, tenement AC efficiency grants, night cooling shelters).
+- Client Web Worker `lib/optimization/pareto-worker.ts` with `canUseParetoWorker()` failover to yielded sync JS so the genetic loop never sits on the rAF / Arrow scrub path.
+- Interactive 2D/3D trade-off chart `components/ui/ParetoFrontierView.tsx` (Cost vs Cat 1–3 ED visits averted). Clicking a vertex writes those exact levers into `PolicyState`; the twin recomputes Gagge, knapsack targeting, and M/M/c hospital metrics.
+- Canopy shade/evapotranspiration and tenement AC-grant COP terms in `lib/epidemiology-engine.ts`. Thermal inequity is a resident-weighted Gini of indoor T_a on 劏房 / tong-lau blocks (ρ_sub ≥ 0.4). Peak grid strain is Σ q_AC · A_roof / 10⁶ MW.
+- Policy-drawer sliders, Control Dock + ⌘K “Run Pareto solver”. `npm run test:pareto`. Delivery ledger in `SYSTEM_INTELLIGENCE.md` §12.
+
+### Changed
+
+- `PolicyState` gains `canopyGreeneryPercent` and `acEfficiencyGrantPct`. Executive-briefing spend splits municipal vs household (AC copay).
+
 ## [0.13.0] — 2026-08-30
 
 ### Added

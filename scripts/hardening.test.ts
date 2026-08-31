@@ -6,6 +6,7 @@ import {
   WASM_PROBE_BYTES,
   canUseDuckDbWasm,
   canUseMonteCarloWorker,
+  canUseParetoWorker,
   isBrowser,
   probeHealthyWebGL2,
   wasmSupported,
@@ -28,6 +29,7 @@ describe("runtime guards", () => {
     assert.equal(wasmSupported(), WebAssembly.validate(WASM_PROBE_BYTES));
     assert.equal(typeof workerAvailable(), "boolean");
     assert.equal(canUseMonteCarloWorker(), isBrowser() && workerAvailable());
+    assert.equal(canUseParetoWorker(), isBrowser() && workerAvailable());
   });
 });
 

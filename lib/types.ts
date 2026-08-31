@@ -113,6 +113,10 @@ export interface PolicyState {
   /** Building ids selected by the DuckDB (or greedy) targeting optimiser. */
   coolRoofTargetIds: string[];
   acDeflectionBylaw: boolean;
+  /** Street-tree / urban canopy cover, 0–100%. Shade + evapotranspiration in canyons. */
+  canopyGreeneryPercent: number;
+  /** Tenement / 劏房 AC efficiency grant, 0–100% of subdivided units. */
+  acEfficiencyGrantPct: number;
 }
 
 export interface CoolRoofCandidate {
@@ -304,6 +308,8 @@ export const BASELINE_POLICY: PolicyState = {
   coolRoofBudgetM2: 0,
   coolRoofTargetIds: [],
   acDeflectionBylaw: false,
+  canopyGreeneryPercent: 0,
+  acEfficiencyGrantPct: 0,
 };
 
 export const DEFAULT_POLICY: PolicyState = {
@@ -313,6 +319,8 @@ export const DEFAULT_POLICY: PolicyState = {
   coolRoofBudgetM2: 0,
   coolRoofTargetIds: [],
   acDeflectionBylaw: false,
+  canopyGreeneryPercent: 0,
+  acEfficiencyGrantPct: 0,
 };
 
 export type { HkoDiurnalEnvelope } from "./hko/types";
