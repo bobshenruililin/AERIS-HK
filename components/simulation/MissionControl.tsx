@@ -14,6 +14,7 @@ import { ControlDock } from "@/components/ui/ControlDock";
 import { LiveOpsToggle } from "@/components/ui/LiveOpsToggle";
 import { CommandPalette, HudHotkeys } from "@/components/ui/CommandPalette";
 import { PolicyAgent } from "@/components/copilot/PolicyAgent";
+import { CinematicDirector } from "@/components/presentation/CinematicDirector";
 import { ClientOnly } from "@/components/system/ClientOnly";
 import { ErrorBoundary } from "@/components/system/ErrorBoundary";
 import { MissionShell } from "@/components/system/MissionShell";
@@ -41,6 +42,7 @@ export function MissionControl() {
             <CommandPalette />
             <HudHotkeys />
             <PolicyAgent />
+            <CinematicDirector />
             <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 md:block">
               Synthetic morphology · live HKO + HA aggregates · not an official product
             </div>

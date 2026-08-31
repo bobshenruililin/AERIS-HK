@@ -79,6 +79,15 @@ describe("HUD keyboard grammar", () => {
       null,
     );
   });
+
+  it("maps ArrowRight / ArrowLeft to briefing beats", () => {
+    assert.deepEqual(interpretHudKey({ key: "ArrowRight", metaKey: false, ctrlKey: false, altKey: false }, idle), {
+      type: "beat-next",
+    });
+    assert.deepEqual(interpretHudKey({ key: "ArrowLeft", metaKey: false, ctrlKey: false, altKey: false }, idle), {
+      type: "beat-prev",
+    });
+  });
 });
 
 describe("formula catalog identities", () => {

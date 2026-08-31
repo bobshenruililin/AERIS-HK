@@ -11,6 +11,12 @@ export const TWIN_ORIGIN = { lon: 114.1628, lat: 22.3307 } as const;
 export const TWIN_FLYIN_EVENT = "aeris-twin-flyin";
 export const TWIN_LOOKAT_EVENT = "aeris-twin-lookat";
 export const TWIN_ORBIT_EVENT = "aeris-twin-orbit";
+export const TWIN_KEYFRAME_EVENT = "aeris-twin-keyframe";
+
+export interface TwinKeyframeDetail {
+  view: TwinView;
+  durationMs?: number;
+}
 
 export interface EnuPoint {
   east: number;
@@ -76,6 +82,22 @@ export function viewFromMapState(view: {
 
 export const HARBOUR_TWIN_VIEW = viewFromMapState(HARBOUR_APPROACH_VIEW);
 export const KOWLOON_TWIN_VIEW = viewFromMapState(KOWLOON_VIEW);
+
+export function viewLookingAt(
+  lon: number,
+  lat: number,
+  opts: { zoom: number; pitch: number; bearing: number; targetUp?: number },
+): TwinView {
+  const view = viewFromMapState({
+    longitude: lon,
+    latitude: lat,
+    zoom: opts.zoom,
+    pitch: opts.pitch,
+    bearing: opts.bearing,
+  });
+  if (opts.targetUp != null) view.targetUp = opts.targetUp;
+  return view;
+}
 
 export function smoothstep(t: number): number {
   const x = clamp(t, 0, 1);

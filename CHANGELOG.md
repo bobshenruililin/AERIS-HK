@@ -2,6 +2,14 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.16.0] — 2026-08-30
+
+### Added
+
+- Executive Presentation Suite: cinematic briefing director `components/presentation/CinematicDirector.tsx` with a 2.6 s keyframe sequencer for camera position, tilt, zoom, and diurnal hour across four narrative beats — Regional Heatwave Overview (Kowloon West 14:00 HKT), Street Canyon Trap (Fuk Wa St 劏房 23:00 HKT), Hospital Triage Deficit (Kwong Wah & Caritas 02:00 HKT), Optimal Intervention Counterfactual. `←` / `→` step beats; keys `1–4` remain HUD presets.
+- Spatial data sonification `lib/audio/sonification.ts`: Web Audio drone modulated by district-mean ISO 7243 WBGT (operational UTCI analogue) and pulsing ticks when a hovered roof exceeds 40 °C sol-air (`T_sa = T_a + q_abs / 22`). `AudioContext` is created only inside `unlock()` after a user gesture.
+- Vector A4 briefing export (PDF + PNG) capturing the live TwinCanvas view, Monte Carlo 95% CI, and Hospital Authority CMC/KWH/PMH/QEH breakdown. `npm run test:presentation`. Delivery ledger in `SYSTEM_INTELLIGENCE.md` §14.
+
 ## [0.15.0] — 2026-08-30
 
 ### Added

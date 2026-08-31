@@ -423,5 +423,40 @@ HUD: `data-testid="live-ops-toggle"` / `ops-mode-live` / `ops-mode-predictive`. 
 
 Zero-deletion invariant unchanged from §12.
 
+## 14. Delivery ledger — Executive Presentation Suite (0.16.0)
+
+Requirement-by-requirement evidence. Gates: `npx tsc --noEmit`, `npm run test:presentation`.
+
+### 14.1 Cinematic briefing director (`components/presentation/CinematicDirector.tsx`)
+
+Four beats in `lib/presentation/beats.ts`. TwinCanvas listens for `aeris-twin-keyframe` and lerps `TwinView` (ENU metres) over `KEYFRAME_MS = 2600`. Diurnal hour uses `lerpHourForward` so 23:00 → 02:00 wraps midnight forward.
+
+| Beat | Title | Hour (HKT) | Look-at | Notes |
+| --- | --- | --- | --- | --- |
+| 1 | The Regional Heatwave Overview | 14:00 | Kowloon West 114.1685, 22.322 | July 2022 plate |
+| 2 | The Street Canyon Trap | 23:00 | Fuk Wa St 114.16307, 22.33102 | Highest \(\rho_{sub}\) on Fuk Wa |
+| 3 | The Hospital Triage Deficit | 02:00 | Midpoint CMC/KWH | Focus KWH; Caritas in frame |
+| 4 | The Optimal Intervention Counterfactual | 15:00 | District policy view | Shelters 24, DHC 72%, bylaw, canopy 55%, AC grant 70%, 22% roof budget |
+
+Keyboard: `ArrowLeft` / `ArrowRight` → `beat-prev` / `beat-next` in `lib/hotkeys.ts`. Presets `1–4` unchanged.
+
+### 14.2 Spatial data sonification (`lib/audio/sonification.ts`)
+
+`AudioContext` is constructed only inside `HeatSoundscape.unlock()` after a click (`Play briefing` or `Enable audio`). No `new AudioContext` at module load. Drone frequency/gain track `snapshot.regionalMeanWbgt` (ISO 7243, not Fiala). Hover ticks pulse while `solAirTempC(outdoorTa, roofAbsorbedWm2) > 40`. `close()` on director teardown.
+
+### 14.3 Vector A4 briefing (`lib/presentation/a4-brief.ts`)
+
+One-click PDF (`%PDF-1.4`, Helvetica, JPEG XObject of `[data-testid=twin-canvas]`) plus PNG raster 1240×1754. Sheet includes active map inset, Monte Carlo 95% CI (p2.5 / p50 / p97.5 + violin), and HA occupancy/deficit/arrivals/Cat-3 p50 for CMC, KWH, PMH, QEH. Existing DH/WHO exporters are unchanged.
+
+### 14.4 SSR / hydration
+
+| Gate | Evidence |
+| --- | --- |
+| Director | Mounted inside `ClientOnly` + `SimulationProvider` (`MissionControl`). |
+| Audio | `lib/audio/sonification.ts` never touches `window` except inside functions. |
+| Defaults | Beat tables and `OPTIMAL_COUNTERFACTUAL_POLICY` are compile-time literals. |
+| Tests | `npm run test:presentation` |
+
+
 
 

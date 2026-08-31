@@ -67,8 +67,16 @@ export function sunDirectionVec(hour: number): [number, number, number] {
  * q_abs = I_peak · sin^{1.15}(γ_s) · (1 − ρ)
  * ρ_asphalt = 0.18, ρ_cool = 0.65
  */
+export const SOL_AIR_HO_WM2K = 22;
+export const SOL_AIR_CRITICAL_C = 40;
+
 export function roofAbsorbedShortwaveWm2(hour: number, coolRoof: boolean): number {
   const peak = 890;
   const albedo = coolRoof ? 0.65 : 0.18;
   return peak * solarRadiationIndex(hour) * (1 - albedo);
+}
+
+/** Sol-air temperature from absorbed shortwave and outdoor dry-bulb. */
+export function solAirTempC(outdoorTaC: number, absorbedWm2: number, ho = SOL_AIR_HO_WM2K): number {
+  return outdoorTaC + absorbedWm2 / Math.max(1, ho);
 }

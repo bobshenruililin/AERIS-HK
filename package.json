@@ -21,6 +21,7 @@
     "test:agent": "tsx --test scripts/agent.test.ts",
     "test:pareto": "tsx --test scripts/pareto.test.ts",
     "test:telemetry": "tsx --test scripts/telemetry.test.ts",
+    "test:presentation": "tsx --test scripts/presentation.test.ts",
     "typecheck": "tsc --noEmit",
     "db:seed": "node --env-file=.env.local --import tsx lib/db/seed.ts",
     "test:bio": "tsx --test scripts/biophysics.test.ts",
