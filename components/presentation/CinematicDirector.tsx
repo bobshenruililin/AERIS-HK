@@ -19,9 +19,13 @@ import {
   type BriefingBeat,
   type BriefingBeatEventDetail,
 } from "@/lib/presentation/beats";
+import { EarthGate } from "@/components/presentation/EarthGate";
+import { isEarthTheater } from "@/lib/presentation/earth-mode";
 import { TWIN_KEYFRAME_EVENT } from "@/lib/twin-camera";
 import type { PolicyState } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const THEATER_BEAT_MS = 7500;
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -39,6 +43,9 @@ export function CinematicDirector() {
   const beatIndexRef = useRef(0);
   const [audioOn, setAudioOn] = useState(false);
   const [audioHint, setAudioHint] = useState("AudioContext waits for a click");
+  const [theaterGate, setTheaterGate] = useState(false);
+  const theaterLiveRef = useRef(false);
+  const theaterTimerRef = useRef<number | null>(null);
   const hourAnimRef = useRef<number | null>(null);
   const policyBackupRef = useRef<PolicyState | null>(null);
 
@@ -56,10 +63,16 @@ export function CinematicDirector() {
 
   const closeDirector = useCallback(() => {
     stopHourAnim();
+    if (theaterTimerRef.current != null) {
+      window.clearTimeout(theaterTimerRef.current);
+      theaterTimerRef.current = null;
+    }
+    theaterLiveRef.current = false;
     restorePolicy();
     openRef.current = false;
     setOpen(false);
     setAudioOn(false);
+    delete document.documentElement.dataset.aerisTheater;
     void heatSoundscape.close();
   }, [restorePolicy]);
 
@@ -110,7 +123,7 @@ export function CinematicDirector() {
     let lastPosted = Number.NaN;
     const step = (now: number) => {
       const u = Math.min(1, (now - t0) / KEYFRAME_MS);
-        const hour = lerpHourCinematic(fromH, toH, easeInOutCubic(u));
+      const hour = lerpHourCinematic(fromH, toH, easeInOutCubic(u));
       if (Number.isNaN(lastPosted) || Math.abs(hour - lastPosted) >= 0.04 || u >= 1) {
         lastPosted = hour;
         simRef.current.setHour(hour);
@@ -176,11 +189,56 @@ export function CinematicDirector() {
     };
   }, []);
 
-  const unlockAudio = async () => {
+  const unlockAudio = useCallback(async () => {
     const ok = await heatSoundscape.unlock();
     setAudioOn(ok);
     setAudioHint(ok ? LIVE_HINT : "AudioContext blocked");
-  };
+    return ok;
+  }, []);
+
+  useEffect(() => {
+    if (isEarthTheater(window.location.pathname, window.location.search)) {
+      setTheaterGate(true);
+      document.documentElement.dataset.aerisTheater = "1";
+    }
+    return () => {
+      delete document.documentElement.dataset.aerisTheater;
+    };
+  }, []);
+
+  const beginTheater = useCallback(() => {
+    const s = simRef.current;
+    policyBackupRef.current = { ...s.policy };
+    theaterLiveRef.current = true;
+    setTheaterGate(false);
+    document.documentElement.dataset.aerisTheater = "playing";
+    void unlockAudio();
+    applyBeat(0);
+    if (theaterTimerRef.current != null) window.clearTimeout(theaterTimerRef.current);
+    const schedule = (fromIndex: number) => {
+      theaterTimerRef.current = window.setTimeout(() => {
+        if (!theaterLiveRef.current) return;
+        if (beatIndexRef.current !== fromIndex) return;
+        const next = fromIndex + 1;
+        if (next >= BRIEFING_BEAT_COUNT) {
+          document.documentElement.dataset.aerisTheater = "played";
+          return;
+        }
+        applyBeat(next);
+        schedule(next);
+      }, THEATER_BEAT_MS);
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!theaterLiveRef.current) return;
+        schedule(0);
+      });
+    });
+  }, [applyBeat, unlockAudio]);
+
+  if (theaterGate) {
+    return <EarthGate onEnter={beginTheater} />;
+  }
 
   if (!open) {
     return <div className="hidden" data-testid="cinematic-director" data-open="0" />;

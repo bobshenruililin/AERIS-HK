@@ -31,6 +31,53 @@ code,
   font-family: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+.font-noto {
+  font-family: var(--font-noto-tc), var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@keyframes aeris-earth-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aeris-earth-ken {
+  from {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.aeris-earth-copy {
+  animation: aeris-earth-in 1.1s ease-out both;
+}
+
+.aeris-earth-ken {
+  animation: aeris-earth-ken 18s ease-out both;
+}
+
+html[data-aeris-theater="playing"] .aeris-earth-chrome {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.65s ease, visibility 0.65s ease;
+}
+
+html[data-aeris-theater="playing"] [data-testid="gpu-failover"] {
+  display: none;
+}
+
+html[data-aeris-theater="playing"] [data-testid="cinematic-director"] > div {
+  bottom: 1.25rem;
+}
+
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   height: 14px;
