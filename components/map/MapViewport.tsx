@@ -14,7 +14,7 @@ import {
   webgpuSupportedSync,
 } from "@/lib/gpu/context-lifecycle";
 import { recordGpuFlags } from "@/lib/runtime-diagnostics";
-import { wantsGpuTwin } from "@/lib/presentation/earth-mode";
+import { isEarthTheater, wantsGpuTwin } from "@/lib/presentation/earth-mode";
 
 const AERISMap = dynamic(() => import("./AERISMap"), {
   ssr: false,
@@ -49,11 +49,20 @@ export function MapViewport() {
       setGpu("software");
       return;
     }
-    if (!probeHealthyWebGL2()) {
-      setGpu("failover");
-      return;
+    const promote = () => {
+      if (!probeHealthyWebGL2()) {
+        setGpu("failover");
+        return;
+      }
+      setGpu("promoted");
+    };
+    const earth = isEarthTheater(window.location.pathname, window.location.search);
+    if (earth) {
+      const id = window.setTimeout(promote, 4000);
+      return () => window.clearTimeout(id);
     }
-    setGpu("promoted");
+    promote();
+    return undefined;
   }, []);
 
   useEffect(() => {

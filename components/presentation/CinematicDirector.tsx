@@ -64,7 +64,7 @@ export function CinematicDirector() {
   const closeDirector = useCallback(() => {
     stopHourAnim();
     if (theaterTimerRef.current != null) {
-      window.clearInterval(theaterTimerRef.current);
+      window.clearTimeout(theaterTimerRef.current);
       theaterTimerRef.current = null;
     }
     theaterLiveRef.current = false;
@@ -214,24 +214,26 @@ export function CinematicDirector() {
     document.documentElement.dataset.aerisTheater = "playing";
     void unlockAudio();
     applyBeat(0);
-    if (theaterTimerRef.current != null) window.clearInterval(theaterTimerRef.current);
-    const arm = () => {
-      if (!theaterLiveRef.current) return;
-      theaterTimerRef.current = window.setInterval(() => {
+    if (theaterTimerRef.current != null) window.clearTimeout(theaterTimerRef.current);
+    const schedule = (fromIndex: number) => {
+      theaterTimerRef.current = window.setTimeout(() => {
         if (!theaterLiveRef.current) return;
-        const next = beatIndexRef.current + 1;
+        if (beatIndexRef.current !== fromIndex) return;
+        const next = fromIndex + 1;
         if (next >= BRIEFING_BEAT_COUNT) {
-          if (theaterTimerRef.current != null) {
-            window.clearInterval(theaterTimerRef.current);
-            theaterTimerRef.current = null;
-          }
           document.documentElement.dataset.aerisTheater = "played";
           return;
         }
         applyBeat(next);
+        schedule(next);
       }, THEATER_BEAT_MS);
     };
-    requestAnimationFrame(() => requestAnimationFrame(arm));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!theaterLiveRef.current) return;
+        schedule(0);
+      });
+    });
   }, [applyBeat, unlockAudio]);
 
   if (theaterGate) {
