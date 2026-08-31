@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #05070c;
+  --foreground: #e2e8f0;
+  --aeris-cyan: #22d3ee;
+  --aeris-emerald: #10b981;
+  --aeris-amber: #f59e0b;
+  --aeris-crimson: #ef4444;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), var(--font-noto-tc), system-ui, sans-serif;
+}
+
+body {
+  background-image:
+    radial-gradient(1200px 600px at 70% -10%, rgba(8, 145, 178, 0.18), transparent 55%),
+    radial-gradient(900px 500px at 10% 110%, rgba(244, 63, 94, 0.08), transparent 50%);
+}
+
+.font-mono,
+code,
+.font-mono * {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 9999px;
+  background: #22d3ee;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
+}
+
+.maplibregl-ctrl-logo,
+.maplibregl-ctrl-attrib {
+  display: none !important;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
