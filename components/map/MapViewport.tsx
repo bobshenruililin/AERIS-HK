@@ -14,6 +14,7 @@ import {
   webgpuSupportedSync,
 } from "@/lib/gpu/context-lifecycle";
 import { recordGpuFlags } from "@/lib/runtime-diagnostics";
+import { wantsGpuTwin } from "@/lib/presentation/earth-mode";
 
 const AERISMap = dynamic(() => import("./AERISMap"), {
   ssr: false,
@@ -24,9 +25,10 @@ type GpuState = "software" | "promoted" | "failover";
 
 /**
  * Deck.gl + MapLibre (Mapbox-compatible style) mount only when the caller
- * asked (?gpu=1) *and* a real non-software WebGL2 context can clear and read
- * back a pixel. Mapbox GL JS is never instantiated; MapLibre is the basemap.
- * TwinCanvas (Canvas2D ENU) is always the picture underneath.
+ * asked (`?gpu=1`, `/earth`, or theater query) *and* a real non-software
+ * WebGL2 context can clear and read back a pixel. Mapbox GL JS is never
+ * instantiated; MapLibre is the basemap. TwinCanvas (Canvas2D ENU) is always
+ * the picture underneath.
  *
  * webglcontextlost calls preventDefault so webglcontextrestored can remount
  * Deck.gl without a page reload.
@@ -37,7 +39,7 @@ export function MapViewport() {
   const [gpuEpoch, setGpuEpoch] = useState(0);
 
   useEffect(() => {
-    const asked = new URLSearchParams(window.location.search).get("gpu") === "1";
+    const asked = wantsGpuTwin(window.location.pathname, window.location.search);
     setAskedGpu(asked);
     recordGpuFlags({ webgl2: probeHealthyWebGL2(), webgpu: webgpuSupportedSync(), contextLost: false });
     void probeWebGPU().then((probe) => {
@@ -65,7 +67,7 @@ export function MapViewport() {
     };
     const onRestored = () => {
       handleWebGlContextRestored();
-      const asked = new URLSearchParams(window.location.search).get("gpu") === "1";
+      const asked = wantsGpuTwin(window.location.pathname, window.location.search);
       if (!asked) return;
       if (!probeHealthyWebGL2()) {
         setGpu("failover");

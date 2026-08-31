@@ -10,6 +10,7 @@ import {
   lerpHourForward,
   pickFukWaTrapBuilding,
 } from "../lib/presentation/beats";
+import { isEarthTheater, normalizePathname, wantsGpuTwin } from "../lib/presentation/earth-mode";
 import { buildA4Pdf, jpegDimensions, modelFromTwin, zipStore } from "../lib/presentation/a4-brief";
 import { droneFrequencyHz, droneGain, SOL_AIR_TICK_C } from "../lib/audio/sonification";
 import { roofAbsorbedShortwaveWm2, solAirTempC, SOL_AIR_CRITICAL_C, SOL_AIR_HO_WM2K } from "../lib/solar";
@@ -156,5 +157,20 @@ describe("HUD arrow keys", () => {
       interpretHudKey({ key: "ArrowRight", metaKey: false, ctrlKey: false, altKey: false }, { typing: true, paletteOpen: false }),
       null,
     );
+  });
+});
+
+describe("Earth theater mode", () => {
+  it("opens theater on /earth and briefing/theater query flags", () => {
+    assert.equal(normalizePathname("/earth/"), "/earth");
+    assert.equal(isEarthTheater("/earth", ""), true);
+    assert.equal(isEarthTheater("/earth/", ""), true);
+    assert.equal(isEarthTheater("/", "?briefing=1"), true);
+    assert.equal(isEarthTheater("/", "?theater=1"), true);
+    assert.equal(isEarthTheater("/", ""), false);
+    assert.equal(wantsGpuTwin("/earth", ""), true);
+    assert.equal(wantsGpuTwin("/", "?gpu=1"), true);
+    assert.equal(wantsGpuTwin("/", ""), false);
+    assert.equal(wantsGpuTwin("/", "?briefing=1"), true);
   });
 });

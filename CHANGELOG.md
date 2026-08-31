@@ -2,6 +2,14 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.18.0] — 2026-08-31
+
+### Added
+
+- Earth theater: `/earth` (also `?briefing=1` / `?theater=1`) is the Google-Earth analogue of the operator HUD. Click-to-enter gate, harbour Ken Burns, bilingual thesis, heat soundscape unlock, and auto-advance across the four cinematic beats (7.5 s holds).
+- Earth URLs request the GPU Deck.gl twin (`wantsGpuTwin`); software ENU TwinCanvas remains the failover.
+- Open Graph / Twitter cards for Kowloon West Earth (`/decade/harbour_approach.png`).
+
 ## [0.17.0] — 2026-08-30
 
 ### Added

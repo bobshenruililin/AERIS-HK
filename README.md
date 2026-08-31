@@ -58,7 +58,7 @@ APIs: `GET /api/health`, `GET /api/districts`, `GET /api/risk`, `GET /api/risk/{
 
 ### 2. Kowloon West planetary twin (`app/`, `lib/`, `components/`)
 
-A Next.js 14 App Router twin of Sham Shui Po / Yau Tsim Mong. Default renderer is a **software ENU TwinCanvas** (deterministic, CI-safe). Optional GPU Deck.gl is gated by `?gpu=1` **and** a healthy WebGL2 context.
+A Next.js 14 App Router twin of Sham Shui Po / Yau Tsim Mong. Default renderer is a **software ENU TwinCanvas** (deterministic, CI-safe). Optional GPU Deck.gl is gated by `?gpu=1` **and** a healthy WebGL2 context. **Earth theater** at `/earth` (or `?briefing=1`) is the click-to-enter cinematic: harbour plate, bilingual thesis, four beats, GPU requested.
 
 Authoritative CRS: **HK1980 Grid (EPSG:2326)** on `properties.hk80` and PostGIS `geom_hk80`. WGS84 (EPSG:4326) is derived exclusively via `lib/crs.ts` (Helmert TOWGS84 + International 1924 TM). Deck.gl `getPosition` is **never** fed HK80 eastings. The software twin projects WGS84 → local ENU metres (`lib/twin-camera.ts`) for display only.
 
