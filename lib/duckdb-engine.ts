@@ -19,7 +19,37 @@ import { bindCoolRoofSql } from "./cool-roof-sql";
 import { emptyCoolRoofPlan, planFromSelected, selectCoolRoofsGreedyJs, totalRoofAreaM2 } from "./cool-roof-optimiser";
 import { attachWindowComparison, selectCoolRoofsKnapsack } from "./cool-roof-knapsack";
 import { knapsackEnsembleBand } from "./ensemble";
+import { aerisDebugWarn } from "./debug";
 import { canUseDuckDbWasm } from "./runtime-guards";
+import { registerAerisWorker } from "./runtime-diagnostics";
+
+type DuckCountRow = { n?: number | string };
+type DuckDistrictAggRow = {
+  district?: string;
+  hour?: number | string;
+  mean_cvi?: number | string;
+  mean_wbgt?: number | string;
+  mean_indoor_ta?: number | string;
+  building_count?: number | string;
+};
+type DuckCriticalRow = {
+  building_id?: string;
+  name_en?: string;
+  name_zh?: string;
+  district?: string;
+  hour?: number | string;
+  cvi?: number | string;
+  micro_wbgt?: number | string;
+  indoor_ta?: number | string;
+};
+type DuckCoolRoofRow = {
+  building_id?: string;
+  cum_area_m2?: number | string;
+};
+
+function duckJson<T>(rec: { toJSON: () => unknown }): T {
+  return rec.toJSON() as T;
+}
 
 type DuckDbModule = typeof import("@duckdb/duckdb-wasm");
 type AsyncDuckDB = import("@duckdb/duckdb-wasm").AsyncDuckDB;
@@ -56,6 +86,7 @@ async function instantiateDuckDb(): Promise<AsyncDuckDB | null> {
         new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }),
       );
       const worker = new Worker(workerUrl, { name: "aeris-duckdb" });
+      registerAerisWorker("duckdb");
       const logger = new duckdbMod.ConsoleLogger();
       const db = new duckdbMod.AsyncDuckDB(logger, worker);
       await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
@@ -64,7 +95,7 @@ async function instantiateDuckDb(): Promise<AsyncDuckDB | null> {
       persistentConn = await db.connect();
       return db;
     } catch (error) {
-      console.warn("[AERIS-HK] DuckDB-WASM unavailable, using columnar fallback.", error);
+      aerisDebugWarn("[AERIS-HK] DuckDB-WASM unavailable, using columnar fallback.", error);
       return null;
     }
   })();
@@ -92,7 +123,7 @@ async function ingestIpcTable(
     await conn.insertArrowFromIPCStream(stream, { name, create: true });
     return;
   } catch (error) {
-    console.warn(`[AERIS-HK] insertArrowFromIPCStream(${name}) failed; trying insertArrowTable.`, error);
+    aerisDebugWarn(`[AERIS-HK] insertArrowFromIPCStream(${name}) failed; trying insertArrowTable.`, error);
   }
 
   await drop();
@@ -100,7 +131,7 @@ async function ingestIpcTable(
     await conn.insertArrowTable(table, { name, create: true });
     return;
   } catch (error) {
-    console.warn(`[AERIS-HK] insertArrowTable(${name}) failed; trying Arrow file scan.`, error);
+    aerisDebugWarn(`[AERIS-HK] insertArrowTable(${name}) failed; trying Arrow file scan.`, error);
   }
 
   await drop();
@@ -117,7 +148,7 @@ async function countRows(conn: AsyncDuckDBConnection, table: string): Promise<nu
   const result = await conn.query(`SELECT COUNT(*)::INTEGER AS n FROM ${table}`);
   const rec = result.toArray()[0];
   if (!rec) return 0;
-  const row = rec.toJSON() as Record<string, unknown>;
+  const row = duckJson<DuckCountRow>(rec);
   return Number(row.n ?? 0);
 }
 
@@ -164,7 +195,7 @@ async function queryDuckDb(
 
   const districtHourly: DistrictHourAggregate[] = [];
   for (const rec of district.toArray()) {
-    const row = rec.toJSON() as Record<string, unknown>;
+    const row = duckJson<DuckDistrictAggRow>(rec);
     districtHourly.push({
       district: String(row.district) as DistrictName,
       hour: Number(row.hour),
@@ -177,7 +208,7 @@ async function queryDuckDb(
 
   const topCritical: CriticalBuildingRow[] = [];
   for (const rec of critical.toArray()) {
-    const row = rec.toJSON() as Record<string, unknown>;
+    const row = duckJson<DuckCriticalRow>(rec);
     const cvi = Number(row.cvi);
     topCritical.push({
       buildingId: String(row.building_id),
@@ -251,8 +282,9 @@ async function runAerisAnalyticsExclusive(args: {
         FROM building_hours h
         INNER JOIN footprints f ON CAST(f.id AS VARCHAR) = CAST(h.building_id AS VARCHAR)
       `);
-      const rec = joined.toArray()[0]?.toJSON() as Record<string, unknown> | undefined;
-      useFootprints = Number(rec?.n ?? 0) > 0;
+      const rec = joined.toArray()[0];
+      const row = rec ? duckJson<DuckCountRow>(rec) : undefined;
+      useFootprints = Number(row?.n ?? 0) > 0;
       footprintsFingerprint = footprintsFp;
     }
 
@@ -264,7 +296,7 @@ async function runAerisAnalyticsExclusive(args: {
       arrowIpc: true,
     };
   } catch (error) {
-    console.warn("[AERIS-HK] DuckDB Arrow IPC query failed; using Arrow columns.", error);
+    aerisDebugWarn("[AERIS-HK] DuckDB Arrow IPC query failed; using Arrow columns.", error);
     return {
       districtHourly: columnar.districtHourly,
       topCritical: columnar.topCritical,
@@ -326,7 +358,7 @@ async function optimiseCoolRoofTargetsExclusive(args: {
     const selected: CoolRoofCandidate[] = [];
     let lastCum = 0;
     for (const rec of result.toArray()) {
-      const row = rec.toJSON() as Record<string, unknown>;
+      const row = duckJson<DuckCoolRoofRow>(rec);
       const id = String(row.building_id ?? "");
       const candidate = byId.get(id);
       if (!candidate) continue;
@@ -344,7 +376,7 @@ async function optimiseCoolRoofTargetsExclusive(args: {
     );
     return attachWindowComparison({ ...exact, queryLatencyMs: performance.now() - started }, windowPlan);
   } catch (error) {
-    console.warn("[AERIS-HK] DuckDB cool-roof window query failed; using greedy fallback.", error);
+    aerisDebugWarn("[AERIS-HK] DuckDB cool-roof window query failed; using greedy fallback.", error);
     return attachWindowComparison(
       { ...exact, queryLatencyMs: performance.now() - started },
       windowFallback,
@@ -353,6 +385,33 @@ async function optimiseCoolRoofTargetsExclusive(args: {
 }
 
 export { totalRoofAreaM2 };
+
+export function isDuckDbInstantiated(): boolean {
+  return dbSingleton != null && persistentConn != null;
+}
+
+/** Warm-path probe: SELECT 1 if WASM is already up. Never instantiates (that would blow the 1 s smoke budget). */
+export async function runSyntheticDuckDbProbe(): Promise<{ ok: boolean; ms: number; detail: string }> {
+  const t0 =
+    typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  if (!persistentConn) {
+    return { ok: true, ms: 0, detail: "wasm-cold" };
+  }
+  try {
+    const result = await persistentConn.query("SELECT 1::INTEGER AS n");
+    const rec = result.toArray()[0];
+    const n = rec ? Number(duckJson<DuckCountRow>(rec).n ?? 0) : 0;
+    const ms =
+      (typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()) -
+      t0;
+    return { ok: n === 1, ms, detail: n === 1 ? "SELECT 1" : `n=${n}` };
+  } catch (error) {
+    const ms =
+      (typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()) -
+      t0;
+    return { ok: false, ms, detail: error instanceof Error ? error.message : "duckdb-throw" };
+  }
+}
 
 export async function disposeDuckDb(): Promise<void> {
   if (persistentConn) {

@@ -39,6 +39,9 @@ export interface MonteCarloResult {
   bedDeficitPct: QuantileBand;
   violinAdmissions: number[];
   violinBeds: number[];
+  /** Histogram counts / n — sums to 1.0. Violin stays peak-normalised. */
+  admissionsPmf: number[];
+  bedsPmf: number[];
   engine: "sync-js" | "worker-js" | "worker-duckdb";
   duckdbMs: number | null;
 }
@@ -71,18 +74,33 @@ function truncatedNormal(rng: () => number, amp: number): number {
   return clamp(z * (amp / 1.96), -amp, amp);
 }
 
-export function densityProfile(samples: number[], bins = MC_VIOLIN_BINS): number[] {
-  if (samples.length === 0) return Array.from({ length: bins }, () => 0);
+function histogramCounts(samples: number[], bins: number): { counts: number[]; n: number } {
+  const counts = new Array<number>(bins).fill(0);
+  if (samples.length === 0) {
+    counts[0] = 1;
+    return { counts, n: 1 };
+  }
   const min = Math.min(...samples);
   const max = Math.max(...samples);
   const span = Math.max(1e-6, max - min);
-  const counts = new Array<number>(bins).fill(0);
   for (const v of samples) {
     const i = Math.min(bins - 1, Math.floor(((v - min) / span) * bins));
     counts[i] += 1;
   }
+  return { counts, n: samples.length };
+}
+
+export function densityProfile(samples: number[], bins = MC_VIOLIN_BINS): number[] {
+  const { counts } = histogramCounts(samples, bins);
   const peak = Math.max(1, ...counts);
   return counts.map((c) => c / peak);
+}
+
+/** Discrete PMF: bin probability mass. ∑ p_i = 1 for a valid distribution. */
+export function probabilityMass(samples: number[], bins = MC_VIOLIN_BINS): number[] {
+  const { counts, n } = histogramCounts(samples, bins);
+  const denom = Math.max(1, n);
+  return counts.map((c) => c / denom);
 }
 
 export function runMonteCarlo(input: MonteCarloInput): MonteCarloResult {
@@ -111,6 +129,8 @@ export function runMonteCarlo(input: MonteCarloInput): MonteCarloResult {
     bedDeficitPct: bandFromSamples(beds),
     violinAdmissions: densityProfile(admissions),
     violinBeds: densityProfile(beds),
+    admissionsPmf: probabilityMass(admissions),
+    bedsPmf: probabilityMass(beds),
     engine: "sync-js",
     duckdbMs: null,
   };

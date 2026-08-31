@@ -25,7 +25,7 @@ export interface Nsga2Config {
   onGeneration?: (generation: number, population: Nsga2Individual[]) => void | Promise<void>;
 }
 
-function dominates(a: number[], b: number[]): boolean {
+export function dominates(a: number[], b: number[]): boolean {
   let better = false;
   for (let i = 0; i < a.length; i += 1) {
     if (a[i] > b[i] + 1e-12) return false;
@@ -233,5 +233,3 @@ export async function runNsga2(config: Nsga2Config): Promise<Nsga2Individual[]> 
   if (onGeneration) await onGeneration(generations, population.filter((ind) => ind.rank === 0));
   return population.filter((ind) => ind.rank === 0).sort(crowdedCompare);
 }
-
-export { dominates };

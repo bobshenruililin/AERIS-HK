@@ -2,6 +2,7 @@
 
 import { solveParetoFrontier } from "./solver";
 import { canUseParetoWorker } from "../runtime-guards";
+import { registerAerisWorker, unregisterAerisWorker } from "../runtime-diagnostics";
 import type { ParetoPoint, ParetoProgressCallback, ParetoSolveInput, ParetoSolveResult } from "./types";
 
 const WORKER_TIMEOUT_MS = 180_000;
@@ -34,9 +35,11 @@ export function runParetoAsync(
     };
     try {
       const worker = new Worker(new URL("./pareto-worker.ts", import.meta.url));
+      registerAerisWorker("nsga2");
       const requestId = Date.now();
       const timer = window.setTimeout(() => {
         worker.terminate();
+        unregisterAerisWorker("nsga2");
         void runWithYields(payload, onProgress).then(finish);
       }, WORKER_TIMEOUT_MS);
       worker.onmessage = (
@@ -56,18 +59,21 @@ export function runParetoAsync(
         if (event.data.type === "result" && event.data.result) {
           window.clearTimeout(timer);
           worker.terminate();
+          unregisterAerisWorker("nsga2");
           finish(event.data.result);
           return;
         }
         if (event.data.type === "error") {
           window.clearTimeout(timer);
           worker.terminate();
+          unregisterAerisWorker("nsga2");
           void runWithYields(payload, onProgress).then(finish);
         }
       };
       worker.onerror = () => {
         window.clearTimeout(timer);
         worker.terminate();
+        unregisterAerisWorker("nsga2");
         void runWithYields(payload, onProgress).then(finish);
       };
       worker.postMessage({ type: "run", requestId, payload });

@@ -54,12 +54,26 @@ export function solarAzimuthDeg(hour: number, dayOfYear = HEAT_EPISODE_DOY): num
   return ((az * 180) / Math.PI + 360) % 360;
 }
 
+const SUN_DIR_SCRATCH: [number, number, number] = [0, 0, -1];
+
 /** Deck.gl DirectionalLight vector (z-up): sunlight arriving from this direction. */
-export function sunDirectionVec(hour: number): [number, number, number] {
+export function sunDirectionVecInto(out: [number, number, number], hour: number): [number, number, number] {
   const el = (solarElevationDeg(hour) * Math.PI) / 180;
   const az = (solarAzimuthDeg(hour) * Math.PI) / 180;
   const cosEl = Math.cos(el);
-  return [-Math.sin(az) * cosEl, -Math.cos(az) * cosEl, -Math.sin(Math.max(el, 0.02))];
+  out[0] = -Math.sin(az) * cosEl;
+  out[1] = -Math.cos(az) * cosEl;
+  out[2] = -Math.sin(Math.max(el, 0.02));
+  return out;
+}
+
+export function sunDirectionVec(hour: number): [number, number, number] {
+  return sunDirectionVecInto([0, 0, -1], hour);
+}
+
+/** Shared scratch for TwinCanvas rAF. Callers must finish using it before the next Into call. */
+export function sunDirectionVecFrame(hour: number): [number, number, number] {
+  return sunDirectionVecInto(SUN_DIR_SCRATCH, hour);
 }
 
 /**

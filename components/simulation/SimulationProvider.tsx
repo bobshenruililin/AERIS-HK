@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
 import type {
@@ -37,6 +38,7 @@ import {
 import { wrapHour } from "@/lib/utils";
 import { optimiseCoolRoofTargets, runAerisAnalytics } from "@/lib/duckdb-engine";
 import { packHourColumns, queryHourColumns } from "@/lib/arrow-columns";
+import { recordArrowScrubMs, recordDuckDbMs } from "@/lib/runtime-diagnostics";
 import {
   defaultCoolRoofBudgetM2,
   rankCoolRoofCandidates,
@@ -98,6 +100,8 @@ import {
 interface SimulationContextValue {
   buildings: BuildingFeature[];
   hour: number;
+  /** rAF-mutated playhead. TwinCanvas wind/solar read this; HUD hour publishes at 20 Hz. */
+  hourClockRef: MutableRefObject<number>;
   setHour: (hour: number) => void;
   playing: boolean;
   setPlaying: (playing: boolean) => void;
@@ -262,7 +266,11 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const footprintsIpcRef = useRef<Uint8Array | null>(null);
   const [footprintsEpoch, setFootprintsEpoch] = useState(0);
   const [hour, setHourState] = useState(15);
+  const hourClockRef = useRef(15);
   const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (!playing) hourClockRef.current = hour;
+  }, [hour, playing]);
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
   const [policy, setPolicyState] = useState<PolicyState>(() => ({
     ...DEFAULT_POLICY,
@@ -555,6 +563,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [scrubQueryMs, setScrubQueryMs] = useState(0);
   useEffect(() => {
     setScrubQueryMs(scrubColumns.elapsedMs);
+    recordArrowScrubMs(scrubColumns.elapsedMs);
   }, [scrubColumns]);
 
   const liveAnalytics = useMemo<DuckDbQueryBundle | null>(() => {
@@ -580,7 +589,10 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       policy,
       footprintsIpc: footprintsIpcRef.current,
     }).then((bundle) => {
-      if (!cancelled) setAnalytics(bundle);
+      if (!cancelled) {
+        setAnalytics(bundle);
+        recordDuckDbMs(bundle.queryLatencyMs);
+      }
     });
     return () => {
       cancelled = true;
@@ -592,10 +604,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     pinnedToNow.current = false;
     let frame = 0;
     let last = performance.now();
+    let hudAcc = 0;
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      setHourState((prev) => wrapHour(prev + dt * speed * 0.5));
+      hourClockRef.current = wrapHour(hourClockRef.current + dt * speed * 0.5);
+      hudAcc += dt;
+      if (hudAcc >= 1 / 20) {
+        hudAcc = 0;
+        setHourState(hourClockRef.current);
+      }
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
@@ -606,7 +624,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     userScrubbed.current = true;
     pinnedToNow.current = false;
     setPlaying(false);
-    setHourState(wrapHour(next));
+    const wrapped = wrapHour(next);
+    hourClockRef.current = wrapped;
+    setHourState(wrapped);
   }, []);
 
   const setPolicy = useCallback((patch: Partial<PolicyState>) => {
@@ -960,6 +980,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     () => ({
       buildings,
       hour,
+      hourClockRef,
       setHour,
       playing,
       setPlaying,
@@ -1139,10 +1160,4 @@ export function useSelectedBuildingState(): BuildingHourState | null {
   const id = selectedId ?? hoveredId;
   if (!id) return null;
   return snapshot.buildings.find((b) => b.buildingId === id) ?? null;
-}
-
-export function usePlaybackClock(): number {
-  const ref = useRef(0);
-  ref.current += 1;
-  return ref.current;
 }

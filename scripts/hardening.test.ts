@@ -80,6 +80,16 @@ describe("HUD keyboard grammar", () => {
     );
   });
 
+  it("maps Ctrl+Shift+D to the system-health overlay", () => {
+    assert.deepEqual(
+      interpretHudKey(
+        { key: "d", metaKey: false, ctrlKey: true, altKey: false, shiftKey: true },
+        idle,
+      ),
+      { type: "diagnostics" },
+    );
+  });
+
   it("maps ArrowRight / ArrowLeft to briefing beats", () => {
     assert.deepEqual(interpretHudKey({ key: "ArrowRight", metaKey: false, ctrlKey: false, altKey: false }, idle), {
       type: "beat-next",

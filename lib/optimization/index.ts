@@ -15,7 +15,7 @@ export type {
   ParetoProgressCallback,
 } from "./types";
 export { weightedGini, unweightedGini, tenementHeatGini, isTenementBlock } from "./gini";
-export { runNsga2, nonDominatedSort, crowdingDistance } from "./nsga2";
+export { runNsga2, nonDominatedSort, crowdingDistance, dominates } from "./nsga2";
 export {
   leversFromVector,
   vectorFromLevers,
