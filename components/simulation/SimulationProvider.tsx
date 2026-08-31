@@ -27,7 +27,7 @@ import type {
 } from "@/lib/types";
 import type { HaNowcast } from "@/lib/ha/types";
 import { DEFAULT_POLICY } from "@/lib/types";
-import { getBuildings } from "@/lib/spatial-data";
+import { buildingCentroid, getBuildings } from "@/lib/spatial-data";
 import { SYNTHETIC_SPATIAL_META } from "@/lib/spatial-source";
 import {
   computePolicyImpact,
@@ -64,7 +64,6 @@ import {
 import type { MonteCarloResult } from "@/lib/monte-carlo";
 import { runMonteCarloAsync } from "@/lib/monte-carlo-client";
 import { TWIN_LOOKAT_EVENT } from "@/lib/twin-camera";
-import { buildingCentroid } from "@/lib/spatial-data";
 import { measureSpatialIndex, spatialGridFromBuildings, type SpatialIndexStats } from "@/lib/spatial-grid";
 import type { SimulationRunDto } from "@/lib/db/types";
 import { clusterMetricsFromSnapshot } from "@/lib/db/metrics";

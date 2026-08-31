@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase, Printer, X } from "lucide-react";
 import { AERIS_FULL_TITLE } from "@/lib/constants";
 import { compileExecutiveBriefing, formatHkd, formatRoi } from "@/lib/executive-briefing";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
 import { scenarioById } from "@/lib/scenarios";
+import { useAerisEscape } from "@/components/system/useAerisEscape";
+import { FormulaTip } from "@/components/ui/FormulaTooltip";
 
 export function ExecutiveBriefing() {
   const { snapshot, impact, policy, hour, buildings, scenarioId, envelope } = useSimulation();
   const [open, setOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
-  const [generatedAt, setGeneratedAt] = useState(() => new Date().toISOString());
+  const [generatedAt, setGeneratedAt] = useState("");
+  const closeBriefing = useCallback(() => setOpen(false), []);
+  useAerisEscape(open, closeBriefing);
 
   useEffect(() => {
     if (open) setGeneratedAt(new Date().toISOString());
@@ -105,7 +109,7 @@ export function ExecutiveBriefing() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={closeBriefing}
                   className="rounded-full p-1 hover:bg-white/10"
                   aria-label="Close executive briefing"
                 >
@@ -156,9 +160,11 @@ export function ExecutiveBriefing() {
               </div>
 
               <h2 className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                24-hour Cat 1–3 arrivals (baseline dim / scenario)
+                <FormulaTip id="dlnm-rr" tone="light">
+                  24-hour Cat 1–3 arrivals (baseline dim / scenario)
+                </FormulaTip>
               </h2>
-              <div className="relative mt-2 flex h-24 items-end gap-px rounded-lg bg-slate-100 px-1 pt-1">
+              <div className="group/tip relative mt-2 flex h-24 items-end gap-px rounded-lg bg-slate-100 px-1 pt-1">
                 {Array.from({ length: 24 }, (_, h) => {
                   const base = briefing.hourlyBaselineArrivals[h] ?? 0;
                   const scen = briefing.hourlyScenarioArrivals[h] ?? 0;
@@ -175,7 +181,9 @@ export function ExecutiveBriefing() {
               </div>
 
               <h2 className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                Hospital occupancy before / after transfer (120% CMC · KWH trigger)
+                <FormulaTip id="mmc" tone="light">
+                  Hospital occupancy before / after transfer (120% CMC · KWH trigger)
+                </FormulaTip>
               </h2>
               <div className="mt-2 space-y-2">
                 {briefing.hospitals.map((h) => (

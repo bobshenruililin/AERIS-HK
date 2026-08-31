@@ -19,6 +19,7 @@ import { bindCoolRoofSql } from "./cool-roof-sql";
 import { emptyCoolRoofPlan, planFromSelected, selectCoolRoofsGreedyJs, totalRoofAreaM2 } from "./cool-roof-optimiser";
 import { attachWindowComparison, selectCoolRoofsKnapsack } from "./cool-roof-knapsack";
 import { knapsackEnsembleBand } from "./ensemble";
+import { canUseDuckDbWasm } from "./runtime-guards";
 
 type DuckDbModule = typeof import("@duckdb/duckdb-wasm");
 type AsyncDuckDB = import("@duckdb/duckdb-wasm").AsyncDuckDB;
@@ -41,14 +42,8 @@ function enqueueDuckDb<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-function assertBrowser(): void {
-  if (typeof window === "undefined" || typeof Worker === "undefined") {
-    throw new Error("DuckDB-WASM is a client-only engine. Import it behind ssr:false.");
-  }
-}
-
 async function instantiateDuckDb(): Promise<AsyncDuckDB | null> {
-  assertBrowser();
+  if (!canUseDuckDbWasm()) return null;
   if (dbSingleton) return dbSingleton;
   if (initPromise) return initPromise;
 

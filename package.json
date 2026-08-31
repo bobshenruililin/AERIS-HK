@@ -17,7 +17,7 @@
     "test:mc": "tsx --test scripts/monte-carlo.test.ts",
     "test:scenarios": "tsx --test scripts/scenarios.test.ts",
     "test:triage": "tsx --test scripts/hospital-triage.test.ts",
-    "test:briefing": "tsx --test scripts/executive-briefing.test.ts",
+    "test:hardening": "tsx --test scripts/hardening.test.ts",
     "typecheck": "tsc --noEmit",
     "db:seed": "node --env-file=.env.local --import tsx lib/db/seed.ts",
     "test:bio": "tsx --test scripts/biophysics.test.ts",

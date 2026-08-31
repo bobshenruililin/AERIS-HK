@@ -44,6 +44,7 @@ export function PolicyDrawer() {
           label="Policy"
           value={`${impact.admissionsAverted.toFixed(1)} Δ`}
           spark={impact.hourlyScenarioArrivals}
+          formulaId="dlnm-rr"
           onClick={() => toggleDrawer("policy")}
         />
       }

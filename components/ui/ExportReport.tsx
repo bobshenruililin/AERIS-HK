@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, Printer, X } from "lucide-react";
 import { AERIS_FULL_TITLE, HEAT_EPISODE_LABEL } from "@/lib/constants";
 import { hkoStatusLabel } from "@/lib/epidemiology-engine";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { formatHourLabel } from "@/lib/utils";
+import { useAerisEscape } from "@/components/system/useAerisEscape";
 
 export function ExportReport() {
   const { snapshot, impact, policy, hour, analytics, envelope, buildings, spatial, haNowcast, coolRoofPlan, hudPreset, setHudPreset } =
@@ -13,7 +14,12 @@ export function ExportReport() {
   const [open, setOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const label = hkoStatusLabel(snapshot.hkoStatus);
-  const [generatedAt, setGeneratedAt] = useState(() => new Date().toISOString());
+  const [generatedAt, setGeneratedAt] = useState("");
+  const closeBriefing = useCallback(() => {
+    setOpen(false);
+    if (hudPreset === 4) setHudPreset(1);
+  }, [hudPreset, setHudPreset]);
+  useAerisEscape(open, closeBriefing);
 
   useEffect(() => {
     if (hudPreset === 4) setOpen(true);
@@ -86,10 +92,7 @@ export function ExportReport() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    if (hudPreset === 4) setHudPreset(1);
-                  }}
+                  onClick={closeBriefing}
                   className="rounded-full p-1 hover:bg-white/10"
                   aria-label="Close briefing"
                 >

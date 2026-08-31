@@ -4,6 +4,7 @@ import { HOSPITALS } from "@/lib/hospitals";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "./GlassPanel";
 import { HudDrawer, HudPill } from "./HudDrawer";
+import { FormulaTip } from "./FormulaTooltip";
 
 export function HospitalBoard() {
   const { snapshot, haNowcast, haError, focusedHospital, setFocusedHospital, isDrawerExpanded, toggleDrawer } =
@@ -26,12 +27,15 @@ export function HospitalBoard() {
           label="HA surge"
           value={`${meanOcc.toFixed(0)}% beds`}
           spark={occSpark}
+          formulaId="mmc"
           onClick={() => toggleDrawer("hospital")}
         />
       }
     >
       <GlassPanel>
-        <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">HA Kowloon West surge</div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">
+          <FormulaTip id="mmc">HA Kowloon West surge</FormulaTip>
+        </div>
         <h2 className="mb-1 text-sm font-semibold text-white">CMC · KWH · PMH · QEH overflow</h2>
         <div className="mb-2 text-[10px] text-slate-400">
           {haNowcast

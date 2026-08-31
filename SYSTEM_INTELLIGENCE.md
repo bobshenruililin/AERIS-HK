@@ -45,10 +45,18 @@ translate equal to the first vertex’s HK80 easting/northing.
 
 - `"use client"` on every Deck.gl, MapLibre, DuckDB-WASM, TwinCanvas module.
 - Map entry: `components/map/MapViewport.tsx` via `next/dynamic(..., { ssr: false })`.
-- GPU Deck.gl mounts only with `?gpu=1` **and** a healthy WebGL2 probe.
+- GPU Deck.gl / MapLibre mounts only with `?gpu=1` **and** a healthy WebGL2 probe
+  (`lib/runtime-guards.ts` `probeHealthyWebGL2`). Failures, `webglcontextlost`, and
+  Deck/MapLibre `onError` demote to the software ENU twin (`data-testid="gpu-failover"`).
+  Mapbox GL JS is never constructed; MapLibre is the Mapbox-compatible basemap.
+- DuckDB instantiates only when `canUseDuckDbWasm()` (window + Worker +
+  `WebAssembly.validate`). Otherwise columnar/Arrow fallback — no throw.
+- Monte Carlo uses a Worker when `Worker` exists; `onerror` / timeout / constructor
+  failure fall back to `engine: "sync-js"`.
+- HUD is gated by `ClientOnly` + `MissionShell` so the first paint matches SSR.
+  Route `app/error.tsx` and `app/global-error.tsx` contain the rest of the tree.
 - Never import `lib/postgis/*`, `lib/neon-archive.ts`, `lib/db/client.ts`, or `pg`
   from client components.
-- DuckDB is guarded with `typeof window` / `Worker` (`lib/duckdb-engine.ts`).
 
 ---
 
@@ -225,3 +233,54 @@ Gates: `npx tsc --noEmit`, `npm run build`, the `test:*` scripts including
 query with `?sim=<uuid>`. Reload hydrates HUD state from
 `simulation_runs.config`. Example snapshot from the persistence leaf:
 `973686da-486c-47f7-a0c1-65c9beb1c671`.
+
+---
+
+## 10. Delivery ledger — full-stack hardening (0.12.0)
+
+Requirement-by-requirement evidence for the hardening goal. Paths are from the
+repo root. Gates: `npx tsc --noEmit`, `npm run test:hardening`.
+
+### 10.1 Defensive error boundaries & hydration
+
+| Requirement | Evidence |
+| --- | --- |
+| Audit client/server boundaries | GPU overlay is `next/dynamic(..., { ssr: false })` in `components/map/MapViewport.tsx`. DuckDB/MC/Deck/MapLibre are `"use client"`. PostGIS/`pg`/Neon archive stay on Route Handlers. |
+| Mapbox / Deck.gl fail over if WebGL disabled | Mapbox GL JS is not instantiated. MapLibre + Deck.gl mount only after `probeHealthyWebGL2()`. `ErrorBoundary` around the GPU overlay; `AERIS_GPU_FAILED_EVENT` + `webglcontextlost` demote to TwinCanvas. Banner `data-testid="gpu-failover"` when `?gpu=1` fails. TwinCanvas has its own `ErrorBoundary` over `CinematicPlate`. |
+| Web Worker / WASM fail over | `lib/runtime-guards.ts`: `wasmSupported()` validates a 8-byte magic module; `canUseDuckDbWasm()` must be true before `new Worker` / `db.instantiate`. Else `instantiateDuckDb()` returns `null` (columnar path). Monte Carlo: `canUseMonteCarloWorker()`; constructor/`onerror`/12 s timeout → `engine: "sync-js"`. |
+| React hydration mismatches | `ClientOnly` (`components/system/ClientOnly.tsx`) renders `MissionShell` on SSR and first client paint; `SimulationProvider` mounts after `useEffect`. `suppressHydrationWarning` on `<html>`/`<body>`. Inspector pin uses `useLayoutEffect` (no `window` during render). Briefing `generatedAt` is empty until open. |
+| Tree containment | `ErrorBoundary` around HUD; `app/error.tsx`; `app/global-error.tsx`. |
+
+### 10.2 Accessibility, tooltips & keyboard
+
+| Binding | Handler | Evidence |
+| --- | --- | --- |
+| `1`–`4` | Dock presets | `lib/hotkeys.ts` `interpretHudKey` → `HudHotkeys` → `setHudPreset` |
+| `Space` | Timeline toggle | same; `preventDefault`; Control Dock / TimeScrubber `title="Space"` |
+| `Cmd+K` / `Ctrl+K` | Search | works while typing; toggles `commandPaletteOpen` |
+| `Esc` | Dismiss cascade | palette → `aeris-escape` (ExportReport, ExecutiveBriefing, BriefingTour) → clear `selectedId` / `inspectorAnchor` / `focusedHospital` |
+
+Formula micro-tooltips (`components/ui/FormulaTooltip.tsx`, `data-testid="formula-tip-<id>"`) quote **exact** engine identities from `lib/formulas.ts`:
+
+| Name in the goal | Identity actually run |
+| --- | --- |
+| **UTCI** | Not Fiala UTCI. Operational outdoor heat is ISO 7243 `WBGT = 0.7 Tw + 0.2 Tg + 0.1 Ta` (`lib/biophysics.ts`). |
+| **PMV** | ISO 7730 Fanger `fangerPmvPpd` with Newton \(T_{cl}\); PPD logistic. |
+| **DLNM Relative Risk** | Not a Gasparrini spline. Bishai-style `RR = max(0.55, 1 + 0.22·ΔT)` (decade) and `exp(0.22·ΔT_spike)` (Monte Carlo). |
+
+Attached to: Header 24h spark + Micro-WBGT hero, TimeScrubber bars (UTCI + PMV + DLNM), CausalStrip stages, HudPill sparklines (hospital M/M/c, policy DLNM, decade DLNM, knapsack), Decade observatory, Monte Carlo violins, inspector Gagge/PMV/WBGT, Executive Briefing charts. Hover **and** keyboard focus (`tabIndex={0}` / parent pill button).
+
+### 10.3 Repo cleanup
+
+| Item | Action |
+| --- | --- |
+| Duplicate `spatial-data` imports | Merged in `SimulationProvider.tsx` |
+| Dead `k` no-op in `HudHotkeys` | Removed; grammar lives in `lib/hotkeys.ts` |
+| `lib/tokens.ts` unused | Wired into `GlassPanel` (`AERIS_TOKENS.color.glass`) |
+| `canvas-confetti` unused | **Kept** — reserved by `.cursorrules` for material admissions-averted, not load decoration |
+| `mapbox-gl` unused in source | **Kept** as react-map-gl peer; never constructed. MapLibre is the basemap. |
+| `npx tsc --noEmit` | Gate: zero errors (`npm run typecheck`) |
+| Tests | `npm run test:hardening` — WASM probe, keyboard grammar, formula identities vs WBGT/Fanger/RR coefficients |
+
+Zero-deletion invariant unchanged: presets 1–4, Gagge identity, knapsack, Monte Carlo, decade observatory, Control Dock, Cmd+K, Fanger/WBGT, 劏房 battery, H3, Neon `?sim=`, FastAPI `aeris_hk/` + `static/`.
+

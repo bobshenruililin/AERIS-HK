@@ -5,8 +5,18 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import type { DrawerId } from "@/lib/hud";
 import { cn } from "@/lib/utils";
+import { FormulaPopover } from "./FormulaTooltip";
+import { FORMULAS, type FormulaId } from "@/lib/formulas";
 
-export function MiniSpark({ values, className, color = "#67e8f9" }: { values: number[]; className?: string; color?: string }) {
+export function MiniSpark({
+  values,
+  className,
+  color = "#67e8f9",
+}: {
+  values: number[];
+  className?: string;
+  color?: string;
+}) {
   const max = Math.max(1, ...values);
   const pts = values
     .map((v, i) => {
@@ -28,23 +38,36 @@ export function HudPill({
   spark,
   onClick,
   testId,
+  formulaId,
 }: {
   label: string;
   value: string;
   spark?: number[];
   onClick: () => void;
   testId?: string;
+  formulaId?: FormulaId;
 }) {
   return (
     <button
       type="button"
       data-testid={testId}
       onClick={onClick}
-      className="pointer-events-auto flex items-center gap-2 rounded-full border border-cyan-300/25 bg-slate-950/70 px-3 py-1.5 text-left shadow-[0_0_24px_rgba(8,145,178,0.18)] backdrop-blur-xl hover:border-cyan-200/50"
+      className="group/tip pointer-events-auto relative flex items-center gap-2 rounded-full border border-cyan-300/25 bg-slate-950/70 px-3 py-1.5 text-left shadow-[0_0_24px_rgba(8,145,178,0.18)] backdrop-blur-xl hover:border-cyan-200/50"
     >
       <span className="text-[9px] uppercase tracking-[0.16em] text-slate-400">{label}</span>
       <span className="font-mono text-[11px] text-cyan-100">{value}</span>
       {spark && spark.length > 1 ? <MiniSpark values={spark} /> : null}
+      {formulaId ? (
+        <>
+          <span className="font-mono text-[9px] text-cyan-400/70" aria-hidden>
+            ƒ
+          </span>
+          <span data-testid={`formula-tip-${formulaId}`} className="sr-only">
+            {FORMULAS[formulaId].name}: {FORMULAS[formulaId].identity}
+          </span>
+          <FormulaPopover id={formulaId} />
+        </>
+      ) : null}
     </button>
   );
 }

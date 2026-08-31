@@ -48,6 +48,7 @@ import {
   type AmbulanceParticle,
   type ArterialStroke,
 } from "@/lib/hospital-triage";
+import { notifyGpuFailed } from "@/lib/runtime-guards";
 
 interface PlumeRow {
   id: string;
@@ -612,12 +613,18 @@ export default function AERISMap() {
       effects={[lighting]}
       onHover={onHover}
       onClick={onClick}
+      onError={() => notifyGpuFailed()}
       getCursor={({ isHovering, isDragging }) =>
         isDragging ? "grabbing" : isHovering ? "pointer" : "grab"
       }
       style={{ position: "absolute", inset: "0" }}
     >
-      <MapLibreMap mapStyle={CARTO_DARK_MATTER_STYLE} attributionControl={false} reuseMaps />
+      <MapLibreMap
+        mapStyle={CARTO_DARK_MATTER_STYLE}
+        attributionControl={false}
+        reuseMaps
+        onError={() => notifyGpuFailed()}
+      />
     </DeckGL>
   );
 }

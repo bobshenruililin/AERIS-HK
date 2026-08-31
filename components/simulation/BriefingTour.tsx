@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Radio } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { TWIN_FLYIN_EVENT } from "@/lib/twin-camera";
+import { useAerisEscape } from "@/components/system/useAerisEscape";
 
 const STEPS = [
   { id: "harbour", label: "Harbour approach", zh: "維港進入", ms: 0 },
@@ -20,6 +21,14 @@ export function BriefingButton() {
   const [running, setRunning] = useState(false);
   const [step, setStep] = useState<(typeof STEPS)[number]["id"] | null>(null);
   const timers = useRef<number[]>([]);
+
+  const cancel = useCallback(() => {
+    for (const id of timers.current) window.clearTimeout(id);
+    timers.current = [];
+    setRunning(false);
+    setStep(null);
+  }, []);
+  useAerisEscape(running, cancel);
 
   useEffect(() => {
     return () => {

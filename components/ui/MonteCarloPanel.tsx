@@ -1,6 +1,7 @@
 "use client";
 
 import type { MonteCarloResult } from "@/lib/monte-carlo";
+import { FormulaTip } from "./FormulaTooltip";
 
 function Violin({ values, color }: { values: number[]; color: string }) {
   const w = 220;
@@ -42,7 +43,9 @@ export function MonteCarloPanel({
       data-testid="monte-carlo-panel"
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] uppercase tracking-[0.16em] text-violet-200">Monte Carlo 95% CI</div>
+        <div className="text-[10px] uppercase tracking-[0.16em] text-violet-200">
+          <FormulaTip id="dlnm-rr">Monte Carlo 95% CI</FormulaTip>
+        </div>
         <div className="font-mono text-[10px] text-slate-500">
           {running ? "sampling…" : result ? `${result.iterations} draws · ${result.engine}` : "idle"}
         </div>
@@ -53,12 +56,16 @@ export function MonteCarloPanel({
             CVD presentations {result.admissions.p025.toFixed(1)}–{result.admissions.p975.toFixed(1)}
             <span className="text-slate-500"> · p50 {result.admissions.p50.toFixed(1)}</span>
           </div>
-          <Violin values={result.violinAdmissions} color="#c4b5fd" />
+          <FormulaTip id="dlnm-rr" className="block w-full">
+            <Violin values={result.violinAdmissions} color="#c4b5fd" />
+          </FormulaTip>
           <div className="font-mono text-[11px] text-violet-100" data-testid="mc-beds-ci">
             Bed deficit {result.bedDeficitPct.p025.toFixed(2)}–{result.bedDeficitPct.p975.toFixed(2)}%
             {result.duckdbMs != null ? ` · DuckDB ${result.duckdbMs.toFixed(0)} ms` : ""}
           </div>
-          <Violin values={result.violinBeds} color="#67e8f9" />
+          <FormulaTip id="dlnm-rr" className="block w-full">
+            <Violin values={result.violinBeds} color="#67e8f9" />
+          </FormulaTip>
           <p className="text-[9px] leading-relaxed text-slate-500">
             ±1.8°C micro-climate spikes and Bernoulli AC-grid failures; Bishai RR 0.22 / °C. Worker + DuckDB
             QUANTILE_CONT when WASM is available.

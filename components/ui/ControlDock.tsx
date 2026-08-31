@@ -40,6 +40,7 @@ export function ControlDock() {
         <div
           className="pointer-events-auto flex items-center gap-1 rounded-full border border-cyan-300/30 bg-slate-950/72 p-1 shadow-[0_0_40px_rgba(8,145,178,0.2)] backdrop-blur-2xl"
           data-testid="control-dock"
+          aria-keyshortcuts="Digit1 Digit2 Digit3 Digit4 Space Meta+K Control+K Escape"
         >
           {([1, 2, 3, 4] as HudPresetId[]).map((id) => {
             const spec = HUD_PRESETS[id];
@@ -83,6 +84,7 @@ export function ControlDock() {
             onClick={() => setPlaying(!playing)}
             className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-400/15 text-cyan-100"
             aria-label={playing ? "Pause" : "Play"}
+            title="Space"
           >
             {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
           </button>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useSimulation } from "@/components/simulation/SimulationProvider";
+import { FormulaTip } from "@/components/ui/FormulaTooltip";
+import type { FormulaId } from "@/lib/formulas";
 
 const STAGES = [
   { k: "heat", en: "HKO heat", zh: "熱力" },
@@ -10,6 +12,15 @@ const STAGES = [
   { k: "queue", en: "M/M/c", zh: "排隊" },
   { k: "roof", en: "knapsack", zh: "屋頂" },
 ] as const;
+
+const STAGE_FORMULA: Record<(typeof STAGES)[number]["k"], FormulaId> = {
+  heat: "utci",
+  gagge: "gagge",
+  cvi: "cvi",
+  ae: "dlnm-rr",
+  queue: "mmc",
+  roof: "knapsack",
+};
 
 export function CausalStrip() {
   const { snapshot, envelope, impact, coolRoofPlan, policy } = useSimulation();
@@ -44,7 +55,9 @@ export function CausalStrip() {
             <div className="absolute -right-1 top-1/2 hidden h-px w-2 bg-cyan-400/40 md:block" />
           ) : null}
           <div className="text-[9px] uppercase tracking-[0.14em] text-slate-500">
-            {stage.en} · {stage.zh}
+            <FormulaTip id={STAGE_FORMULA[stage.k]}>
+              {stage.en} · {stage.zh}
+            </FormulaTip>
           </div>
           <div className="font-mono text-sm text-cyan-100" data-testid={`causal-${stage.k}`}>
             {values[stage.k]}
