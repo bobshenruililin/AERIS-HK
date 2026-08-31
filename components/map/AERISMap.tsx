@@ -40,6 +40,14 @@ import {
 import { ThermalShimmerExtension } from "@/lib/thermal-shimmer-extension";
 import { VenturiStreamExtension } from "@/lib/venturi-stream-extension";
 import { lodFromZoom, packInstanceExtrusions, sliceHourInstances } from "@/lib/instance-mesh";
+import {
+  advectAmbulanceParticles,
+  arterialStrokes,
+  createAmbulanceParticles,
+  planFingerprint,
+  type AmbulanceParticle,
+  type ArterialStroke,
+} from "@/lib/hospital-triage";
 
 interface PlumeRow {
   id: string;
@@ -81,8 +89,11 @@ export default function AERISMap() {
   const [viewState, setViewState] = useState<MapViewState>({ ...HARBOUR_APPROACH_VIEW });
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
   const [particles, setParticles] = useState<WindParticle[]>(particlesRef.current);
+  const ambulanceRef = useRef<AmbulanceParticle[]>([]);
+  const [ambulances, setAmbulances] = useState<AmbulanceParticle[]>([]);
   const [gpuTime, setGpuTime] = useState(0);
   const userMoved = useRef(false);
+  const planKey = planFingerprint(snapshot.triage);
 
   const targeted = useMemo(() => new Set(policy.coolRoofTargetIds), [policy.coolRoofTargetIds]);
 
@@ -137,6 +148,11 @@ export default function AERISMap() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    ambulanceRef.current = createAmbulanceParticles(snapshot.triage);
+    setAmbulances(ambulanceRef.current);
+  }, [planKey, snapshot.triage]);
+
   const lodRef = useRef(lod);
   lodRef.current = lod;
 
@@ -152,9 +168,13 @@ export default function AERISMap() {
         return;
       }
       particlesRef.current = advectWindParticles(particlesRef.current, dt, hour, buildings, forcing);
+      if (ambulanceRef.current.length > 0) {
+        ambulanceRef.current = advectAmbulanceParticles(ambulanceRef.current, dt);
+      }
       emit += dt;
       if (emit >= 1 / 8) {
         setParticles(particlesRef.current);
+        setAmbulances(ambulanceRef.current);
         setGpuTime(now / 1000);
         emit = 0;
       }
@@ -234,6 +254,7 @@ export default function AERISMap() {
   }, [buildings, targeted, focusedHospital, centroidById]);
 
   const streaks = useMemo(() => windStreaksFromParticles(particles), [particles]);
+  const transferStrokes = useMemo(() => arterialStrokes(snapshot.triage), [snapshot.triage]);
 
   const cityLayers = useMemo(() => {
     const highlightId = selectedId ?? hoveredId;
@@ -479,7 +500,41 @@ export default function AERISMap() {
     ];
   }, [lod, hudLayers.windVectors, streaks, particles, gpuTime, venturiExtension]);
 
-  const layers = useMemo(() => [...cityLayers, ...windLayers], [cityLayers, windLayers]);
+  const ambulanceLayers = useMemo(() => {
+    if (lod === 0 || transferStrokes.length === 0) return [];
+    return [
+      new PathLayer<ArterialStroke>({
+        id: "ambulance-arterials",
+        data: transferStrokes,
+        getPath: (d) => d.path,
+        getColor: (d) =>
+          d.arterial === "nathan-road" ? [251, 146, 60, 210] : [244, 63, 94, 210],
+        getWidth: (d) => 6 + Math.min(10, d.patients * 0.18),
+        widthUnits: "meters",
+        capRounded: true,
+        jointRounded: true,
+      }),
+      new ScatterplotLayer<AmbulanceParticle>({
+        id: "ambulance-particles",
+        data: ambulances,
+        getPosition: (d) => [d.lon, d.lat],
+        getRadius: 9,
+        radiusUnits: "meters",
+        radiusMinPixels: 3,
+        radiusMaxPixels: 8,
+        getFillColor: (d) =>
+          d.arterial === "nathan-road" ? [254, 215, 170, 240] : [254, 202, 202, 240],
+        stroked: true,
+        getLineColor: [15, 23, 42, 220],
+        lineWidthMinPixels: 1,
+      }),
+    ];
+  }, [lod, transferStrokes, ambulances]);
+
+  const layers = useMemo(
+    () => [...cityLayers, ...windLayers, ...ambulanceLayers],
+    [cityLayers, windLayers, ambulanceLayers],
+  );
 
   const onViewStateChange = useCallback((params: { viewState: Record<string, unknown> }) => {
     const next = params.viewState;

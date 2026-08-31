@@ -543,6 +543,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     if (Object.keys(next.policyPatch).length > 0) {
       setPolicyState((prev) => ({ ...prev, ...next.policyPatch }));
     }
+    if (typeof next.playheadHour === "number") {
+      setHourState(wrapHour(next.playheadHour));
+    }
     setHudPresetState(3);
     setDrawerOverride({});
     setHudLayers(HUD_PRESETS[3].layers);

@@ -156,7 +156,15 @@ export function ControlDock() {
                     on ? "bg-amber-300 text-slate-950" : "text-slate-400 hover:bg-white/10 hover:text-amber-100",
                   )}
                 >
-                  {s.id === "july-2022-heatwave" ? "Jul 2022" : s.id === "typhoon-subsidence" ? "Typhoon" : "Blackout"}
+                  {s.id === "july-2022-heatwave"
+                    ? "Jul 2022"
+                    : s.id === "typhoon-subsidence"
+                      ? "Typhoon"
+                      : s.id === "district-blackout"
+                        ? "Blackout"
+                        : s.id === "super-typhoon-heat-surge"
+                          ? "Super TY"
+                          : "3 AM"}
                 </button>
               );
             })}

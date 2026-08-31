@@ -12,6 +12,13 @@ import { aggregateHeatPlumes } from "@/lib/h3-index";
 import type { BuildingFeature, HospitalCode, SystemHourSnapshot } from "@/lib/types";
 import type { HudLayers } from "@/lib/hud";
 import { advectWindParticles, createWindParticles, type WindParticle } from "@/lib/wind-field";
+import {
+  advectAmbulanceParticles,
+  arterialStrokes,
+  createAmbulanceParticles,
+  planFingerprint,
+  type AmbulanceParticle,
+} from "@/lib/hospital-triage";
 import { castGroundShadow, solarPositionHk, sunEnuFromLookAt } from "@/lib/solar-engine";
 import {
   lodFromDistanceM,
@@ -117,6 +124,8 @@ export function TwinCanvas() {
   const lookRef = useRef<{ t0: number; from: TwinView; to: TwinView } | null>(null);
   const orbitRef = useRef<{ active: boolean; t0: number; base: TwinView } | null>(null);
   const particlesRef = useRef<WindParticle[]>(createWindParticles());
+  const ambulanceRef = useRef<AmbulanceParticle[]>([]);
+  const ambulancePlanKeyRef = useRef("");
   const pickRef = useRef<Array<{ id: string; x: number; y: number; depth: number; visible: boolean }>>([]);
 
   const meshes = useMemo<MeshBuilding[]>(() => {
@@ -248,6 +257,13 @@ export function TwinCanvas() {
           state.buildings,
           state.forcing,
         );
+        const key = planFingerprint(state.snapshot.triage);
+        if (key !== ambulancePlanKeyRef.current) {
+          ambulancePlanKeyRef.current = key;
+          ambulanceRef.current = createAmbulanceParticles(state.snapshot.triage);
+        } else if (ambulanceRef.current.length > 0) {
+          ambulanceRef.current = advectAmbulanceParticles(ambulanceRef.current, dt);
+        }
       }
       const slice = sliceHourInstances(packRef.current, state.hour, lod);
       drawFrame(ctx, canvas, {
@@ -263,6 +279,7 @@ export function TwinCanvas() {
         selectedId: state.selectedId,
         focusedHospital: state.focusedHospital,
         particles: particlesRef.current,
+        ambulances: ambulanceRef.current,
         now,
         pickRef,
         layers: state.hudLayers,
@@ -313,7 +330,7 @@ export function TwinCanvas() {
           }),
           44,
         );
-        if (hospital && (hospital === "CMC" || hospital === "KWH" || hospital === "QEH")) {
+        if (hospital) {
           sim.setFocusedHospital(sim.focusedHospital === hospital ? null : (hospital as HospitalCode));
           return;
         }
@@ -369,6 +386,7 @@ function drawFrame(
     selectedId: string | null;
     focusedHospital: HospitalCode | null;
     particles: WindParticle[];
+    ambulances: AmbulanceParticle[];
     now: number;
     pickRef: MutableRefObject<Array<{ id: string; x: number; y: number; depth: number; visible: boolean }>>;
     layers: HudLayers;
@@ -713,6 +731,41 @@ function drawFrame(
       ctx.beginPath();
       ctx.arc(q.x, q.y, (1.4 + p.speed * 0.38) * dpr, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  if (args.lod > 0) {
+    const strokes = arterialStrokes(args.snapshot.triage);
+    for (const stroke of strokes) {
+      ctx.beginPath();
+      let started = false;
+      for (const [lon, lat] of stroke.path) {
+        const q = projectEnu(wgs84ToEnu(lon, lat, 8), view, w, h, basis);
+        if (!q.visible) continue;
+        if (!started) {
+          ctx.moveTo(q.x, q.y);
+          started = true;
+        } else {
+          ctx.lineTo(q.x, q.y);
+        }
+      }
+      if (started) {
+        ctx.strokeStyle =
+          stroke.arterial === "nathan-road" ? "rgba(251,146,60,0.85)" : "rgba(244,63,94,0.85)";
+        ctx.lineWidth = (2.2 + Math.min(4, stroke.patients * 0.08)) * dpr;
+        ctx.stroke();
+      }
+    }
+    for (const p of args.ambulances) {
+      const q = projectEnu(wgs84ToEnu(p.lon, p.lat, 10), view, w, h, basis);
+      if (!q.visible) continue;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, 3.4 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = p.arterial === "nathan-road" ? "rgba(254,215,170,0.95)" : "rgba(254,202,202,0.95)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(15,23,42,0.9)";
+      ctx.lineWidth = 1.1 * dpr;
+      ctx.stroke();
     }
   }
 

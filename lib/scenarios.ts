@@ -7,7 +7,12 @@ import type { PhysicsForcing } from "./physics-forcing";
 import { mergeForcing } from "./physics-forcing";
 import { clamp, lerp, wrapHour } from "./utils";
 
-export type StressScenarioId = "july-2022-heatwave" | "typhoon-subsidence" | "district-blackout";
+export type StressScenarioId =
+  | "july-2022-heatwave"
+  | "typhoon-subsidence"
+  | "district-blackout"
+  | "super-typhoon-heat-surge"
+  | "subdivided-3am-battery";
 
 export interface StressScenario {
   id: StressScenarioId;
@@ -27,6 +32,8 @@ export interface StressScenario {
     dayRh: number;
     forceWhot: boolean;
   };
+  /** When set, applying the plate jumps the playhead (e.g. 3 AM battery peak). */
+  playheadHour?: number;
 }
 
 export const STRESS_SCENARIOS: readonly StressScenario[] = [
@@ -103,6 +110,60 @@ export const STRESS_SCENARIOS: readonly StressScenario[] = [
       troughHour: 5,
       nightRh: 0.86,
       dayRh: 0.7,
+      forceWhot: true,
+    },
+  },
+  {
+    id: "super-typhoon-heat-surge",
+    nameEn: "Super Typhoon + Post-Storm Heat Surge",
+    nameZh: "超強颱風 + 風後熱湧",
+    summaryEn:
+      "Coastal flooding in Sham Shui Po lowlands after landfall, stalled sea breeze, and extreme post-cyclone humidity driving a heat surge.",
+    summaryZh: "深水埗低地沿海水浸、海風停滯，氣旋過後極端濕度疊加熱湧。",
+    policyPatch: {},
+    forcing: mergeForcing({
+      seaBreezeScale: 0.15,
+      cloudCover: 0.55,
+      nightRhFloor: 0.94,
+      ozoneIndex: 0.4,
+      coastalFloodM: 1.4,
+      postStormRhBoost: 0.08,
+      midnightAcRejectorBoost: 0.55,
+    }),
+    envelope: {
+      peakAirTempC: 35.6,
+      troughAirTempC: 30.2,
+      peakHour: 14.8,
+      troughHour: 5.4,
+      nightRh: 0.94,
+      dayRh: 0.82,
+      forceWhot: true,
+    },
+  },
+  {
+    id: "subdivided-3am-battery",
+    nameEn: "Subdivided Flat Concrete Thermal Battery (3 AM Peak)",
+    nameZh: "劏房混凝土熱電池（凌晨三時峰值）",
+    summaryEn:
+      "High ambient heat persists indoors well into the early morning: uninsulated concrete fabric keeps 劏房 above 34°C at 03:00 HKT.",
+    summaryZh: "環境高溫在室內持續至清晨，無隔熱混凝土使劏房在凌晨三時仍高於 34°C。",
+    policyPatch: {},
+    playheadHour: 3,
+    forcing: mergeForcing({
+      seaBreezeScale: 0.4,
+      cloudCover: 0.08,
+      nightRhFloor: 0.91,
+      midnightAcRejectorBoost: 2.4,
+      batteryIntensity: 1.65,
+      ozoneIndex: 0.18,
+    }),
+    envelope: {
+      peakAirTempC: 36.2,
+      troughAirTempC: 32.4,
+      peakHour: 15.2,
+      troughHour: 5.5,
+      nightRh: 0.91,
+      dayRh: 0.62,
       forceWhot: true,
     },
   },

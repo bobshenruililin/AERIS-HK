@@ -83,6 +83,9 @@ Living plan for the Atmospheric & Epidemiological Risk Inference System — Hong
 - [x] Monte Carlo 95% CI violins (1,000 draws) retained on the policy drawer
 - [x] `SYSTEM_INTELLIGENCE.md` formulas and benches
 - [x] Deck.gl 20k instanced extrusions + LoD culling; Arrow <5 ms scrub; DuckDB Worker isolation; Neon spatial/timestamp indexes + SWR
+- [x] Multi-cluster CMC/KWH → PMH/QEH rebalancing at 120% beds; ambulance vectors on West Kowloon Corridor / Nathan Road
+- [x] Super Typhoon + post-storm heat surge and 劏房 3 AM concrete thermal-battery stress plates
+- [x] Executive Briefing Mode (population at risk, HA bed deficit, ROI/$)
 - [ ] Figma / Notion / Canva / Drive MCP (requires Cursor desktop authentication)
 - [ ] Authentication and audit log for HA/DH users (login)
 - [ ] Traditional Chinese screen-reader pass and WCAG contrast on glass panels

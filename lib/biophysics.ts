@@ -192,6 +192,7 @@ export function subdividedFlatThermalBatteryC(opts: {
   liveIndoorC: number;
   chargeIndoorC: number;
   subdividedFlatDensity: number;
+  batteryIntensity?: number;
 }): number {
   const density = clamp(opts.subdividedFlatDensity, 0, 1);
   const night = nightBatteryWeight(opts.hour);
@@ -200,7 +201,8 @@ export function subdividedFlatThermalBatteryC(opts: {
   const decay = Math.exp(-dt / CONCRETE_THERMAL_BATTERY_TAU_H);
   const stored = Math.max(0, opts.chargeIndoorC - opts.liveIndoorC);
   const trap = 3.15 * density * decay;
-  return night * (stored * density * decay + trap);
+  const intensity = opts.batteryIntensity ?? 1;
+  return night * intensity * (stored * density * decay + trap);
 }
 
 export function applySubdividedFlatThermalLag(
@@ -208,12 +210,14 @@ export function applySubdividedFlatThermalLag(
   liveIndoorC: number,
   chargeIndoorC: number,
   subdividedFlatDensity: number,
+  batteryIntensity = 1,
 ): { indoorC: number; batteryC: number } {
   const batteryC = subdividedFlatThermalBatteryC({
     hour,
     liveIndoorC,
     chargeIndoorC,
     subdividedFlatDensity,
+    batteryIntensity,
   });
   return { indoorC: liveIndoorC + batteryC, batteryC };
 }

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { applyScenarioEnvelope, scenarioById, STRESS_SCENARIOS } from "../lib/scenarios";
-import { evaluateBuildingAtHour } from "../lib/epidemiology-engine";
-import { getBuildings } from "../lib/spatial-data";
+import { evaluateBuildingAtHour, isShamShuiPoCoastalLowland } from "../lib/epidemiology-engine";
+import { getBuildings, buildingCentroid } from "../lib/spatial-data";
 import { windAt } from "../lib/wind-field";
 import { DEFAULT_POLICY } from "../lib/types";
 import type { HkoDiurnalEnvelope } from "../lib/types";
@@ -40,11 +40,13 @@ const stubEnvelope: HkoDiurnalEnvelope = {
 };
 
 describe("stress scenario matrix", () => {
-  it("ships the three overnight historic / stress plates", () => {
-    assert.equal(STRESS_SCENARIOS.length, 3);
+  it("ships five historic / climate stress plates including Super Typhoon and 3 AM battery", () => {
+    assert.equal(STRESS_SCENARIOS.length, 5);
     assert.ok(scenarioById("july-2022-heatwave"));
     assert.ok(scenarioById("typhoon-subsidence"));
     assert.ok(scenarioById("district-blackout"));
+    assert.ok(scenarioById("super-typhoon-heat-surge"));
+    assert.ok(scenarioById("subdivided-3am-battery"));
   });
 
   it("loads July 2022 at 37.4°C with 88% night RH and zero cloud", () => {
@@ -82,6 +84,53 @@ describe("stress scenario matrix", () => {
       state.indoorWetBulbC >= 36,
       `${dense.properties.nameEn} indoor Tw ${state.indoorWetBulbC.toFixed(2)}`,
     );
+  });
+
+  it("floods Sham Shui Po lowlands and lifts post-storm humidity on Super Typhoon + Heat Surge", () => {
+    const s = scenarioById("super-typhoon-heat-surge")!;
+    assert.equal(s.forcing.coastalFloodM, 1.4);
+    assert.ok(s.forcing.postStormRhBoost > 0);
+    assert.ok(s.forcing.nightRhFloor >= 0.94);
+    assert.ok(s.forcing.seaBreezeScale <= 0.15);
+    const buildings = getBuildings();
+    const lowland = buildings.find((b) => {
+      const [lon, lat] = buildingCentroid(b);
+      return isShamShuiPoCoastalLowland(b.properties.district, lon, lat);
+    });
+    const upland = buildings.find((b) => b.properties.district === "Yau Tsim Mong");
+    assert.ok(lowland && upland);
+    const env = applyScenarioEnvelope(stubEnvelope, s);
+    const flooded = evaluateBuildingAtHour(lowland, 15, DEFAULT_POLICY, env, s.forcing);
+    const control = evaluateBuildingAtHour(upland, 15, DEFAULT_POLICY, env, s.forcing);
+    const dry = evaluateBuildingAtHour(lowland, 15, DEFAULT_POLICY, env, {
+      ...s.forcing,
+      coastalFloodM: 0,
+    });
+    assert.ok(
+      flooded.indoorTa > dry.indoorTa + 0.6,
+      `lowland indoor ${flooded.indoorTa.toFixed(2)} vs dry ${dry.indoorTa.toFixed(2)}`,
+    );
+    assert.ok(
+      flooded.indoorTa > control.indoorTa,
+      `SSP flood ${flooded.indoorTa.toFixed(2)} should exceed YTM ${control.indoorTa.toFixed(2)}`,
+    );
+  });
+
+  it("keeps 劏房 indoor heat above 34°C at 03:00 on the concrete thermal-battery plate", () => {
+    const s = scenarioById("subdivided-3am-battery")!;
+    assert.equal(s.playheadHour, 3);
+    assert.ok(s.forcing.batteryIntensity >= 1.65);
+    assert.equal(s.envelope.troughAirTempC, 32.4);
+    const buildings = getBuildings();
+    const dense = buildings.find((b) => b.properties.subdividedFlatDensity >= 0.9) ?? buildings[0];
+    const env = applyScenarioEnvelope(stubEnvelope, s);
+    const night = evaluateBuildingAtHour(dense, 3, DEFAULT_POLICY, env, s.forcing);
+    assert.ok(
+      night.indoorTa > 34,
+      `${dense.properties.nameEn} 03:00 indoor ${night.indoorTa.toFixed(2)} battery ${night.thermalBatteryC.toFixed(2)}`,
+    );
+    const day = evaluateBuildingAtHour(dense, 15, DEFAULT_POLICY, env, s.forcing);
+    assert.ok(day.thermalBatteryC === 0, `15:00 battery must stay inert, got ${day.thermalBatteryC}`);
   });
 });
 

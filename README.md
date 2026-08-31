@@ -151,6 +151,7 @@ npm run test:twin && npm run test:decade && npm run test:solar
 npm run test:mc && npm run test:scenarios && npm run test:bio
 npm run test:h3 && npm run test:db && npm run test:spatial
 npm run test:instance && npm run test:arrow && npm run test:cache
+npm run test:triage && npm run test:briefing
 npm run build
 ```
 

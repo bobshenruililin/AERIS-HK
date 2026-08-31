@@ -32,7 +32,7 @@ export function CausalStrip() {
     gagge: "S = M − W − E − R − C",
     cvi: "WBGT · 劏房 · elderly · blockage",
     ae: "catchment-weighted Poisson",
-    queue: "CMC · KWH · QEH",
+    queue: "CMC · KWH · PMH · QEH",
     roof: `${policy.coolRoofTargetIds.length} roofs · ${Math.round(coolRoofPlan?.selectedAreaM2 ?? 0)} m²`,
   };
 
