@@ -44,6 +44,7 @@ export function CinematicDirector() {
   const [audioOn, setAudioOn] = useState(false);
   const [audioHint, setAudioHint] = useState("AudioContext waits for a click");
   const [theaterGate, setTheaterGate] = useState(false);
+  const theaterLiveRef = useRef(false);
   const theaterTimerRef = useRef<number | null>(null);
   const hourAnimRef = useRef<number | null>(null);
   const policyBackupRef = useRef<PolicyState | null>(null);
@@ -66,6 +67,7 @@ export function CinematicDirector() {
       window.clearInterval(theaterTimerRef.current);
       theaterTimerRef.current = null;
     }
+    theaterLiveRef.current = false;
     restorePolicy();
     openRef.current = false;
     setOpen(false);
@@ -207,22 +209,29 @@ export function CinematicDirector() {
   const beginTheater = useCallback(() => {
     const s = simRef.current;
     policyBackupRef.current = { ...s.policy };
+    theaterLiveRef.current = true;
     setTheaterGate(false);
     document.documentElement.dataset.aerisTheater = "playing";
     void unlockAudio();
     applyBeat(0);
     if (theaterTimerRef.current != null) window.clearInterval(theaterTimerRef.current);
-    theaterTimerRef.current = window.setInterval(() => {
-      const next = beatIndexRef.current + 1;
-      if (next >= BRIEFING_BEAT_COUNT) {
-        if (theaterTimerRef.current != null) {
-          window.clearInterval(theaterTimerRef.current);
-          theaterTimerRef.current = null;
+    const arm = () => {
+      if (!theaterLiveRef.current) return;
+      theaterTimerRef.current = window.setInterval(() => {
+        if (!theaterLiveRef.current) return;
+        const next = beatIndexRef.current + 1;
+        if (next >= BRIEFING_BEAT_COUNT) {
+          if (theaterTimerRef.current != null) {
+            window.clearInterval(theaterTimerRef.current);
+            theaterTimerRef.current = null;
+          }
+          document.documentElement.dataset.aerisTheater = "played";
+          return;
         }
-        return;
-      }
-      applyBeat(next);
-    }, THEATER_BEAT_MS);
+        applyBeat(next);
+      }, THEATER_BEAT_MS);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(arm));
   }, [applyBeat, unlockAudio]);
 
   if (theaterGate) {

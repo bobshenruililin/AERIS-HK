@@ -63,11 +63,19 @@ code,
   animation: aeris-earth-ken 18s ease-out both;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .aeris-earth-copy,
-  .aeris-earth-ken {
-    animation: none;
-  }
+html[data-aeris-theater="playing"] .aeris-earth-chrome {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.65s ease, visibility 0.65s ease;
+}
+
+html[data-aeris-theater="playing"] [data-testid="gpu-failover"] {
+  display: none;
+}
+
+html[data-aeris-theater="playing"] [data-testid="cinematic-director"] > div {
+  bottom: 1.25rem;
 }
 
 input[type="range"]::-webkit-slider-thumb {

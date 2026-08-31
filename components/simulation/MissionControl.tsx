@@ -31,23 +31,25 @@ export function MissionControl() {
           >
             <MapViewport />
             <HudOverlays />
-            <ControlDock />
-            <LiveOpsToggle />
-            <Header />
-            <HospitalBoard />
-            <PolicyDrawer />
-            <CriticalList />
+            <div className="aeris-earth-chrome pointer-events-none absolute inset-0 z-20">
+              <ControlDock />
+              <LiveOpsToggle />
+              <Header />
+              <HospitalBoard />
+              <PolicyDrawer />
+              <CriticalList />
+              <DecadeObservatory />
+              <TimeScrubber />
+              <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 md:block">
+                Synthetic morphology · live HKO + HA aggregates · not an official product
+              </div>
+            </div>
             <BuildingInspector />
-            <DecadeObservatory />
-            <TimeScrubber />
             <CommandPalette />
             <HudHotkeys />
             <PolicyAgent />
             <CinematicDirector />
             <SystemHealthOverlay />
-            <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 md:block">
-              Synthetic morphology · live HKO + HA aggregates · not an official product
-            </div>
           </div>
         </SimulationProvider>
       </ErrorBoundary>

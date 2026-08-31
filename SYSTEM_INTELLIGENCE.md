@@ -495,7 +495,8 @@ DuckDB `console.warn` behind `aerisDebugEnabled()`. Dead `AERIS_CONCEPT_PROMPTS`
 | Surface | Behaviour |
 | --- | --- |
 | `/earth`, `?briefing=1`, `?theater=1` | `isEarthTheater` → click-to-enter `EarthGate` (`data-testid="theater-gate"`) |
-| Enter | Unlocks heat soundscape, `applyBeat(0)`, auto-advance every 7.5 s across 4 beats |
+| Enter | Unlocks heat soundscape, `applyBeat(0)`, auto-advance every 7.5 s across 4 beats (timer armed after first paint) |
+| Chrome | `html[data-aeris-theater=playing]` hides `.aeris-earth-chrome` (dock, header, drawers, scrubber). Esc or end-of-tour restores. |
 | GPU | `wantsGpuTwin` is true on Earth URLs; software ENU failover unchanged |
 | Esc | Closes director, restores policy, clears `data-aeris-theater` |
 | Tests | `npm run test:presentation` — path/query matrix in `scripts/presentation.test.ts` |
