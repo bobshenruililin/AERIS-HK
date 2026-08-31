@@ -82,6 +82,18 @@ import {
 } from "@/lib/simulations-client";
 import { sampleHkoEnvelope } from "@/lib/hko/envelope";
 import { EMPTY_COPILOT, shiftEnvelopeTemp, type CopilotSpatialState } from "@/lib/agent";
+import {
+  DEFAULT_OPS_MODE,
+  lookupFromStations,
+  sampleSensorMesh,
+  sensorLod as selectSensorLod,
+  syntheticStationsFromAmbient,
+  type HkoLiveFeed,
+  type HkoStationLive,
+  type LoRaWanSensor,
+  type OpsMode,
+  type SensorMeshSnapshot,
+} from "@/lib/telemetry";
 
 interface SimulationContextValue {
   buildings: BuildingFeature[];
@@ -135,6 +147,14 @@ interface SimulationContextValue {
   scenarioId: StressScenarioId | null;
   applyScenario: (id: StressScenarioId) => void;
   clearScenario: () => void;
+  opsMode: OpsMode;
+  enterLiveMonitoring: () => void;
+  enterPredictiveTwin: () => void;
+  liveFeed: HkoLiveFeed | null;
+  liveFeedError: string | null;
+  awsStations: HkoStationLive[];
+  sensorMesh: SensorMeshSnapshot;
+  sensorLod: LoRaWanSensor[];
   forcing: PhysicsForcing;
   monteCarlo: MonteCarloResult | null;
   monteCarloRunning: boolean;
@@ -218,6 +238,23 @@ async function fetchFootprintsIpc(): Promise<{ bytes: Uint8Array; meta: Partial<
   };
 }
 
+async function fetchLiveTelemetry(): Promise<HkoLiveFeed> {
+  const res = await fetch("/api/telemetry/live", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`HKO telemetry HTTP ${res.status}`);
+  }
+  return (await res.json()) as HkoLiveFeed;
+}
+
+const EMPTY_SENSOR_MESH: SensorMeshSnapshot = {
+  meshId: "ssp-tenement-lorawan",
+  count: 0,
+  sensors: [],
+  meanIndoorC: 0,
+  meanAmbientC: 0,
+  acOnCount: 0,
+};
+
 export function SimulationProvider({ children }: { children: ReactNode }) {
   const seed = useMemo(() => getBuildings(), []);
   const [buildings, setBuildings] = useState<BuildingFeature[]>(seed);
@@ -254,6 +291,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [drawerOverride, setDrawerOverride] = useState<Partial<Record<DrawerId, boolean>>>({});
   const [inspectorAnchor, setInspectorAnchor] = useState<ScreenAnchor | null>(null);
   const [scenarioId, setScenarioId] = useState<StressScenarioId | null>(null);
+  const [opsMode, setOpsMode] = useState<OpsMode>(DEFAULT_OPS_MODE);
+  const [liveFeed, setLiveFeed] = useState<HkoLiveFeed | null>(null);
+  const [liveFeedError, setLiveFeedError] = useState<string | null>(null);
   const [monteCarlo, setMonteCarlo] = useState<MonteCarloResult | null>(null);
   const [monteCarloRunning, setMonteCarloRunning] = useState(false);
   const [simId, setSimId] = useState<string | null>(null);
@@ -271,6 +311,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const userScrubbed = useRef(false);
   const pinnedToNow = useRef(true);
   const budgetTouched = useRef(false);
+  const liveFeedRef = useRef<HkoLiveFeed | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,6 +333,29 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     };
     load();
     const id = window.setInterval(load, 120_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void fetchLiveTelemetry()
+        .then((next) => {
+          if (cancelled) return;
+          setLiveFeed(next);
+          setLiveFeedError(null);
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setLiveFeedError(error instanceof Error ? error.message : "HKO telemetry failed");
+          }
+        });
+    };
+    load();
+    const id = window.setInterval(load, 30_000);
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -389,6 +453,18 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     [scenarioEnvelope, copilotAmbientDeltaC],
   );
   const forcing = scenario?.forcing ?? DEFAULT_PHYSICS_FORCING;
+  const spatialWx = useMemo(() => {
+    if (opsMode !== "live" || !liveFeed) return null;
+    return lookupFromStations(liveFeed.stations);
+  }, [opsMode, liveFeed]);
+  liveFeedRef.current = liveFeed;
+
+  useEffect(() => {
+    if (opsMode !== "live" || !liveFeed) return;
+    if (pinnedToNow.current && !userScrubbed.current) {
+      setHourState(wrapHour(liveFeed.hourHkt));
+    }
+  }, [opsMode, liveFeed]);
   const totalRoofM2 = useMemo(() => totalRoofAreaM2(buildings), [buildings]);
 
   useEffect(() => {
@@ -440,16 +516,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [coolRoofCandidates, policy.coolRoofBudgetM2, totalRoofM2]);
 
   const cache = useMemo(
-    () => precomputeHourlyCache(policy, buildings, forcedEnvelope, forcing),
-    [policy, buildings, forcedEnvelope, forcing],
+    () => precomputeHourlyCache(policy, buildings, forcedEnvelope, forcing, spatialWx),
+    [policy, buildings, forcedEnvelope, forcing, spatialWx],
   );
   const impact = useMemo(
-    () => computePolicyImpact(policy, buildings, forcedEnvelope, haNowcast, forcing),
-    [policy, buildings, forcedEnvelope, haNowcast, forcing],
+    () => computePolicyImpact(policy, buildings, forcedEnvelope, haNowcast, forcing, spatialWx),
+    [policy, buildings, forcedEnvelope, haNowcast, forcing, spatialWx],
   );
   const snapshot = useMemo(
-    () => evaluateSystemAtHour(hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing),
-    [hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing],
+    () => evaluateSystemAtHour(hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing, spatialWx),
+    [hour, policy, buildings, cache, forcedEnvelope, haNowcast, forcing, spatialWx],
   );
   const [spatialIndex, setSpatialIndex] = useState<SpatialIndexStats>({
     vectorCount: 0,
@@ -585,6 +661,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const applyScenario = useCallback((id: StressScenarioId) => {
     const next = scenarioById(id);
     if (!next) return;
+    setOpsMode("predictive");
     setScenarioId(id);
     if (Object.keys(next.policyPatch).length > 0) {
       setPolicyState((prev) => ({ ...prev, ...next.policyPatch }));
@@ -599,7 +676,28 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   const clearScenario = useCallback(() => {
     setScenarioId(null);
+    setOpsMode("live");
+    pinnedToNow.current = true;
+    userScrubbed.current = false;
   }, []);
+
+  const enterLiveMonitoring = useCallback(() => {
+    setOpsMode("live");
+    setScenarioId(null);
+    pinnedToNow.current = true;
+    userScrubbed.current = false;
+    setPlaying(false);
+    const current = liveFeedRef.current;
+    if (current) setHourState(wrapHour(current.hourHkt));
+  }, []);
+
+  const enterPredictiveTwin = useCallback(() => {
+    applyScenario("july-2022-heatwave");
+    userScrubbed.current = true;
+    pinnedToNow.current = false;
+    setHourState(15.1);
+    setPlaying(false);
+  }, [applyScenario]);
 
   const focusBuilding = useCallback(
     (id: string) => {
@@ -625,7 +723,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     try {
       const hourly = Array.from({ length: 24 }, (_, h) =>
         clusterMetricsFromSnapshot(
-          evaluateSystemAtHour(h, policy, buildings, cache, forcedEnvelope, haNowcast, forcing),
+          evaluateSystemAtHour(h, policy, buildings, cache, forcedEnvelope, haNowcast, forcing, spatialWx),
         ),
       ).flat();
       const ambient = forcedEnvelope
@@ -679,6 +777,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     speed,
     hudPreset,
     impact.admissionsAverted,
+    spatialWx,
   ]);
 
   const loadSimulation = useCallback(async (id: string): Promise<boolean> => {
@@ -816,6 +915,26 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     [paretoFront, setPolicy],
   );
 
+  const awsStations = useMemo(() => {
+    if (opsMode === "live" && liveFeed) return liveFeed.stations;
+    const sample = forcedEnvelope ? sampleHkoEnvelope(forcedEnvelope, hour) : null;
+    return syntheticStationsFromAmbient(sample?.airTempC ?? 29.2, sample?.rhFrac ?? 0.72, liveFeed?.pulledAtMs ?? 0);
+  }, [opsMode, liveFeed, forcedEnvelope, hour]);
+
+  const sensorMesh = useMemo(() => {
+    const mesh = sampleSensorMesh({
+      stations: awsStations,
+      buildings,
+      policy,
+      hour,
+      forcing,
+      pulledAtMs: liveFeed?.pulledAtMs ?? 0,
+    });
+    return mesh.count > 0 ? mesh : EMPTY_SENSOR_MESH;
+  }, [awsStations, buildings, policy, hour, forcing, liveFeed]);
+
+  const sensorLodPoints = useMemo(() => selectSensorLod(sensorMesh.sensors), [sensorMesh]);
+
   const paretoValue = useMemo<ParetoSolverValue>(
     () => ({
       paretoFront,
@@ -889,6 +1008,14 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       scenarioId,
       applyScenario,
       clearScenario,
+      opsMode,
+      enterLiveMonitoring,
+      enterPredictiveTwin,
+      liveFeed,
+      liveFeedError,
+      awsStations,
+      sensorMesh,
+      sensorLod: sensorLodPoints,
       forcing,
       monteCarlo,
       monteCarloRunning,
@@ -954,6 +1081,14 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       scenarioId,
       applyScenario,
       clearScenario,
+      opsMode,
+      enterLiveMonitoring,
+      enterPredictiveTwin,
+      liveFeed,
+      liveFeedError,
+      awsStations,
+      sensorMesh,
+      sensorLodPoints,
       forcing,
       monteCarlo,
       monteCarloRunning,

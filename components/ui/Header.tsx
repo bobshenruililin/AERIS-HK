@@ -33,6 +33,7 @@ export function Header() {
     toggleDrawer,
     scenarioId,
     forcing,
+    opsMode,
   } = useSimulation();
   const label = hkoStatusLabel(snapshot.hkoStatus);
   const elev = solarElevationDeg(hour);
@@ -68,7 +69,7 @@ export function Header() {
               </h1>
               <p className="text-[11px] text-slate-400">
                 Kowloon West heat-health digital twin · 深水埗 / 油尖旺 · first-principles Gagge + M/M/c
-                {scenarioId ? ` · ${scenarioId}` : ""}
+                {scenarioId ? ` · ${scenarioId}` : opsMode === "live" ? " · LIVE MONITORING" : " · PREDICTIVE TWIN"}
               </p>
             </div>
           </button>
@@ -76,6 +77,16 @@ export function Header() {
             <BriefingButton />
             <ExportReport />
             <ExecutiveBriefing />
+            <div
+              className={`rounded-full border px-3 py-1 text-[11px] font-medium ${
+                opsMode === "live"
+                  ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-100"
+                  : "border-amber-400/40 bg-amber-500/20 text-amber-100"
+              }`}
+              data-testid="ops-mode-badge"
+            >
+              {opsMode === "live" ? "LIVE MONITORING" : "PREDICTIVE TWIN"}
+            </div>
             <div className={`rounded-full border px-3 py-1 text-[11px] font-medium ${badge}`}>
               {label.zh} · {label.en}
             </div>

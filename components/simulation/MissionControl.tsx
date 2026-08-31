@@ -11,6 +11,7 @@ import { PolicyDrawer } from "@/components/simulation/PolicyDrawer";
 import { HudOverlays } from "@/components/assets/HudOverlays";
 import { DecadeObservatory } from "@/components/ui/DecadeObservatory";
 import { ControlDock } from "@/components/ui/ControlDock";
+import { LiveOpsToggle } from "@/components/ui/LiveOpsToggle";
 import { CommandPalette, HudHotkeys } from "@/components/ui/CommandPalette";
 import { PolicyAgent } from "@/components/copilot/PolicyAgent";
 import { ClientOnly } from "@/components/system/ClientOnly";
@@ -29,6 +30,7 @@ export function MissionControl() {
             <MapViewport />
             <HudOverlays />
             <ControlDock />
+            <LiveOpsToggle />
             <Header />
             <HospitalBoard />
             <PolicyDrawer />

@@ -28,6 +28,7 @@ import type { HkoDiurnalEnvelope } from "./hko/types";
 import { sampleHkoEnvelope } from "./hko/envelope";
 import type { HaNowcast } from "./ha/types";
 import { DEFAULT_PHYSICS_FORCING, type PhysicsForcing } from "./physics-forcing";
+import type { SpatialWxLookup, SpatialWxSample } from "./telemetry/hko-feed";
 import {
   applySubdividedFlatThermalLag,
   BATTERY_CHARGE_HOUR,
@@ -70,11 +71,17 @@ function relativeHumidity(
   hour: number,
   envelope: HkoDiurnalEnvelope | null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatial: SpatialWxSample | null = null,
 ): number {
   const h = wrapHour(hour);
   let rh: number;
   if (envelope) {
     rh = clamp(sampleHkoEnvelope(envelope, hour).rhFrac, 0.25, 0.99);
+    if (spatial?.rhFrac != null && Number.isFinite(spatial.rhFrac)) {
+      rh = clamp(rh + (spatial.rhFrac - envelope.kowloonRhFrac), 0.25, 0.99);
+    }
+  } else if (spatial?.rhFrac != null && Number.isFinite(spatial.rhFrac)) {
+    rh = clamp(spatial.rhFrac, 0.25, 0.99);
   } else {
     const nightBoost = 0.5 + 0.5 * Math.cos(((h - 4) * Math.PI) / 12);
     rh = clamp(0.7 + 0.12 * nightBoost, 0.4, 0.95);
@@ -115,11 +122,23 @@ export function localCoolRoofFraction(building: BuildingFeature, policy: PolicyS
   return clamp(policy.coolRoofPercent / 50, 0, 1);
 }
 
-function regionalAirTemp(hour: number, coolRoofPercent: number, envelope: HkoDiurnalEnvelope | null): number {
+function regionalAirTemp(
+  hour: number,
+  coolRoofPercent: number,
+  envelope: HkoDiurnalEnvelope | null,
+  spatial: SpatialWxSample | null = null,
+): number {
   const h = wrapHour(hour);
   const roofCool = 1.15 * (coolRoofPercent / 50);
   if (envelope) {
-    return sampleHkoEnvelope(envelope, h).airTempC - roofCool * 0.55;
+    let t = sampleHkoEnvelope(envelope, h).airTempC;
+    if (spatial?.airTempC != null && Number.isFinite(spatial.airTempC)) {
+      t += spatial.airTempC - envelope.kowloonAirTempC;
+    }
+    return t - roofCool * 0.55;
+  }
+  if (spatial?.airTempC != null && Number.isFinite(spatial.airTempC)) {
+    return spatial.airTempC - roofCool * 0.55;
   }
   const cosine = Math.cos((2 * Math.PI * (h - 15.05)) / 24);
   return 29.2 - roofCool * 0.55 + (2.4 - roofCool * 0.45) * cosine;
@@ -157,8 +176,9 @@ export function canyonAirTemp(
   policy: PolicyState,
   envelope: HkoDiurnalEnvelope | null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatial: SpatialWxSample | null = null,
 ): number {
-  const regional = regionalAirTemp(hour, policy.coolRoofPercent, envelope);
+  const regional = regionalAirTemp(hour, policy.coolRoofPercent, envelope, spatial);
   const ac = effectiveAcHeat(building, policy, hour, forcing);
   const { svf } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
   const canopy = policyCanopyFraction(policy);
@@ -184,10 +204,11 @@ function indoorAirTempLive(
   policy: PolicyState,
   envelope: HkoDiurnalEnvelope | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatial: SpatialWxSample | null = null,
 ): number {
   const lag = thermalLagHours(building, policy, forcing);
-  const laggedCanyon = canyonAirTemp(hour - lag, building, policy, envelope, forcing);
-  const liveCanyon = canyonAirTemp(hour, building, policy, envelope, forcing);
+  const laggedCanyon = canyonAirTemp(hour - lag, building, policy, envelope, forcing, spatial);
+  const liveCanyon = canyonAirTemp(hour, building, policy, envelope, forcing, spatial);
   const canopy = policyCanopyFraction(policy);
   const trap =
     2.55 * building.properties.subdividedFlatDensity +
@@ -215,9 +236,10 @@ export function indoorAirTemp(
   policy: PolicyState,
   envelope: HkoDiurnalEnvelope | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatial: SpatialWxSample | null = null,
 ): number {
-  const live = indoorAirTempLive(hour, building, policy, envelope, forcing);
-  const charge = indoorAirTempLive(BATTERY_CHARGE_HOUR, building, policy, envelope, forcing);
+  const live = indoorAirTempLive(hour, building, policy, envelope, forcing, spatial);
+  const charge = indoorAirTempLive(BATTERY_CHARGE_HOUR, building, policy, envelope, forcing, spatial);
   const lagged = applySubdividedFlatThermalLag(
     hour,
     live,
@@ -251,6 +273,7 @@ export function gaggeTwoNode(
   outdoorTa: number,
   envelope: HkoDiurnalEnvelope | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatial: SpatialWxSample | null = null,
 ): BuildingHourState["gagge"] {
   const h = wrapHour(hour);
   const elderlyMet = lerp(1.0, 0.86, building.properties.elderlyRatio);
@@ -258,12 +281,13 @@ export function gaggeTwoNode(
   const M = MET_RESTING * elderlyMet * nightMet;
   const W = 0;
   const canopy = policyCanopyFraction(policy);
-  const vAir =
+  const vent = 1 - building.properties.ventilationBlockage * (1 - 0.25 * canopy);
+  let vAir =
     0.12 +
-    0.95 *
-      (1 - building.properties.ventilationBlockage * (1 - 0.25 * canopy)) *
-      (0.4 + 0.6 * solarRadiationIndex(h)) *
-      (0.35 + 0.65 * forcing.seaBreezeScale);
+    0.95 * vent * (0.4 + 0.6 * solarRadiationIndex(h)) * (0.35 + 0.65 * forcing.seaBreezeScale);
+  if (spatial?.windSpeedMs != null && Number.isFinite(spatial.windSpeedMs)) {
+    vAir = 0.08 + 0.55 * spatial.windSpeedMs * vent;
+  }
   const hc = convectiveCoefficient(vAir);
   const Tsk = 35.7 - 0.027 * M + 0.18 * building.properties.subdividedFlatDensity;
   const { hw } = canyonMetrics(building.properties.height, building.properties.roofAreaM2);
@@ -276,7 +300,7 @@ export function gaggeTwoNode(
   const Tr = globeTemp(indoorTa, h, building.properties.ventilationBlockage, insol.directBeamFrac, forcing.cloudCover);
   const C = hc * (Tsk - indoorTa);
   const R = STEFAN_LINEAR_HR * (Tsk - Tr);
-  const rh = relativeHumidity(h, envelope, forcing);
+  const rh = relativeHumidity(h, envelope, forcing, spatial);
   const Pa = rh * satVaporKpa(indoorTa);
   const Psk = satVaporKpa(Tsk);
   const he = LEWIS_RATIO * hc;
@@ -348,10 +372,11 @@ export function evaluateBuildingAtHour(
   policy: PolicyState,
   envelope: HkoDiurnalEnvelope | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatial: SpatialWxSample | null = null,
 ): BuildingHourState {
-  const outdoorTa = canyonAirTemp(hour, building, policy, envelope, forcing);
-  const indoorLive = indoorAirTempLive(hour, building, policy, envelope, forcing);
-  const chargeIndoor = indoorAirTempLive(BATTERY_CHARGE_HOUR, building, policy, envelope, forcing);
+  const outdoorTa = canyonAirTemp(hour, building, policy, envelope, forcing, spatial);
+  const indoorLive = indoorAirTempLive(hour, building, policy, envelope, forcing, spatial);
+  const chargeIndoor = indoorAirTempLive(BATTERY_CHARGE_HOUR, building, policy, envelope, forcing, spatial);
   const lagged = applySubdividedFlatThermalLag(
     hour,
     indoorLive,
@@ -361,7 +386,7 @@ export function evaluateBuildingAtHour(
   );
   const floodC = coastalFloodIndoorBoostC(building, forcing);
   const indoorTa = lagged.indoorC + floodC;
-  const rh = relativeHumidity(hour, envelope, forcing);
+  const rh = relativeHumidity(hour, envelope, forcing, spatial);
   const indoorRh = Math.min(
     0.99,
     rh + 0.04 + (floodC > 0 ? 0.05 * clamp(forcing.coastalFloodM / 1.4, 0, 1) : 0),
@@ -387,7 +412,7 @@ export function evaluateBuildingAtHour(
   const indoorWbgt = indoorSolved.wbgt;
   const twIn = indoorSolved.tw;
   const microWbgt = 0.68 * indoorWbgt + 0.32 * canyonWbgt;
-  const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa, envelope, forcing);
+  const gagge = gaggeTwoNode(hour, building, policy, indoorTa, outdoorTa, envelope, forcing, spatial);
   const fanger = fangerPmvPpd({
     airTempC: indoorTa,
     meanRadiantC: tgIn,
@@ -500,16 +525,19 @@ export function evaluateBuildingInterpolated(
   cache?: Map<string, BuildingHourState>,
   envelope: HkoDiurnalEnvelope | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatialWx: SpatialWxLookup | null = null,
 ): BuildingHourState {
   const h = wrapHour(hour);
   const h0 = Math.floor(h);
   const h1 = (h0 + 1) % 24;
   const t = h - h0;
+  const [lon, lat] = buildingCentroid(building);
+  const spatial = spatialWx?.(lon, lat) ?? null;
   if (t < 1e-6) {
-    return cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing);
+    return cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing, spatial);
   }
-  const a = cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing);
-  const b = cache?.get(`${building.properties.id}:${h1}`) ?? evaluateBuildingAtHour(building, h1, policy, envelope, forcing);
+  const a = cache?.get(`${building.properties.id}:${h0}`) ?? evaluateBuildingAtHour(building, h0, policy, envelope, forcing, spatial);
+  const b = cache?.get(`${building.properties.id}:${h1}`) ?? evaluateBuildingAtHour(building, h1, policy, envelope, forcing, spatial);
   return interpolateBuildingState(a, b, t, h);
 }
 
@@ -725,9 +753,10 @@ export function evaluateSystemAtHour(
   envelope: HkoDiurnalEnvelope | null = null,
   nowcast: HaNowcast | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatialWx: SpatialWxLookup | null = null,
 ): SystemHourSnapshot {
   const buildingStates = buildings.map((b) =>
-    evaluateBuildingInterpolated(b, hour, policy, cache, envelope, forcing),
+    evaluateBuildingInterpolated(b, hour, policy, cache, envelope, forcing, spatialWx),
   );
   const hospitalsRaw = HOSPITALS.map((spec) =>
     evaluateHospital(spec, hour, buildingStates, buildings, policy, nowcast, forcing),
@@ -760,11 +789,14 @@ export function precomputeHourlyCache(
   buildings: BuildingFeature[] = getBuildings(),
   envelope: HkoDiurnalEnvelope | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatialWx: SpatialWxLookup | null = null,
 ): Map<string, BuildingHourState> {
   const cache = new Map<string, BuildingHourState>();
   for (const building of buildings) {
+    const [lon, lat] = buildingCentroid(building);
+    const spatial = spatialWx?.(lon, lat) ?? null;
     for (let hour = 0; hour < 24; hour += 1) {
-      cache.set(`${building.properties.id}:${hour}`, evaluateBuildingAtHour(building, hour, policy, envelope, forcing));
+      cache.set(`${building.properties.id}:${hour}`, evaluateBuildingAtHour(building, hour, policy, envelope, forcing, spatial));
     }
   }
   return cache;
@@ -776,9 +808,10 @@ export function computePolicyImpact(
   envelope: HkoDiurnalEnvelope | null = null,
   nowcast: HaNowcast | null = null,
   forcing: PhysicsForcing = DEFAULT_PHYSICS_FORCING,
+  spatialWx: SpatialWxLookup | null = null,
 ): PolicyImpact {
-  const baselineCache = precomputeHourlyCache(BASELINE_POLICY, buildings, envelope, forcing);
-  const scenarioCache = precomputeHourlyCache(policy, buildings, envelope, forcing);
+  const baselineCache = precomputeHourlyCache(BASELINE_POLICY, buildings, envelope, forcing, spatialWx);
+  const scenarioCache = precomputeHourlyCache(policy, buildings, envelope, forcing, spatialWx);
   let baselineAdmissions24h = 0;
   let scenarioAdmissions24h = 0;
   let baselineMort = 0;
@@ -792,8 +825,8 @@ export function computePolicyImpact(
   const hourlyScenarioBedDeficitBeds: number[] = [];
 
   for (let hour = 0; hour < 24; hour += 1) {
-    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope, nowcast, forcing);
-    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope, nowcast, forcing);
+    const base = evaluateSystemAtHour(hour, BASELINE_POLICY, buildings, baselineCache, envelope, nowcast, forcing, spatialWx);
+    const scen = evaluateSystemAtHour(hour, policy, buildings, scenarioCache, envelope, nowcast, forcing, spatialWx);
     hourlyBaselineArrivals.push(base.totalCat13Arrivals);
     hourlyScenarioArrivals.push(scen.totalCat13Arrivals);
     hourlyBaselineBedDeficitBeds.push(haBedDeficitBeds(base.hospitals));

@@ -25,7 +25,7 @@ export function PolicyDrawer() {
     monteCarloRunning,
     scenarioId,
     applyScenario,
-    clearScenario,
+    enterLiveMonitoring,
   } = useSimulation();
   const headerExpanded = isDrawerExpanded("header");
   const windowDelta =
@@ -80,7 +80,12 @@ export function PolicyDrawer() {
             </button>
           ))}
           {scenarioId ? (
-            <button type="button" onClick={clearScenario} className="rounded-full px-2 py-0.5 text-[9px] text-slate-500">
+            <button
+              type="button"
+              data-testid="live-envelope"
+              onClick={enterLiveMonitoring}
+              className="rounded-full px-2 py-0.5 text-[9px] text-slate-500"
+            >
               live envelope
             </button>
           ) : null}

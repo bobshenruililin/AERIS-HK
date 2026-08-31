@@ -363,4 +363,65 @@ SVG Cost vs averted-hospitalizations curve; 3D isometric uses ΔGini as the thir
 
 Zero-deletion invariant unchanged from §11.
 
+---
+
+## 13. Delivery ledger — live telemetry pipeline (0.15.0)
+
+Requirement-by-requirement evidence. Gates: `npx tsc --noEmit`, `npm run test:telemetry`.
+
+### 13.1 Meteorological ingestion (`lib/telemetry/hko-feed.ts`)
+
+Edge-safe Fetch pollers (no `node:fs`) hit HKO Open Data CSVs:
+
+| Variable | Endpoint | Stations |
+| --- | --- | --- |
+| Air temperature | `latest_1min_temperature.csv` | Sham Shui Po, King's Park, Kai Tak Runway Park |
+| Relative humidity | `latest_1min_humidity.csv` | King's Park, Kai Tak (SSP neighbor-filled) |
+| Wind vector | `latest_10min_wind.csv` | King's Park, Kai Tak (`Calm` → 0 m/s) |
+| Solar radiation | `latest_1min_solar.csv` | King's Park global W/m², broadcast to SSP / Kai Tak |
+
+Route `GET /api/telemetry/live` uses `export const runtime = "edge"` with a 45 s in-isolate memo. Existing `GET /api/hko/envelope` (Node ring buffer) is unchanged.
+
+IDW identity, \(p=2\), \(d_i\) haversine kilometres:
+
+\[
+\hat z(\mathbf x)=\frac{\sum_i d_i^{-p} z_i}{\sum_i d_i^{-p}}
+\]
+
+Collocated queries collapse to the station value (\(d < 10^{-6}\) km). Temperature, RH, solar, and wind \(u,v\) are interpolated independently so a missing Sham Shui Po RH row does not drop the temperature field. Grid: 12×8 over lon 114.155–114.22, lat 22.297–22.338.
+
+### 13.2 Synthetic LoRaWAN mesh (`lib/telemetry/sensor-network.ts`)
+
+250 sensors (`LRN-0001`…`LRN-0250`) jittered inside Sham Shui Po footprints with \(\rho_{sub}\ge 0.35\). Placement uses `mulberry32(hashString(id))` — no `Date.now()` on the random path.
+
+\[
+T_{\mathrm{in}}^{t+\Delta t}=T_{\mathrm{in}}^{t}+\frac{\Delta t}{\tau}(T_{\mathrm{eq}}-T_{\mathrm{in}}^{t}),\quad
+\tau=4\,\mathrm{h}\cdot(0.5+0.5\rho_{\mathrm{sub}}),\quad
+T_{\mathrm{eq}}=(1-\alpha)T_{\mathrm{idw}}+\alpha T_{\mathrm{AC}}
+\]
+
+\(T_{\mathrm{AC}}=27.4^\circ\mathrm{C}\), \(\alpha=0.82\) when the window unit is on. Night 劏房 battery is `applySubdividedFlatThermalLag` (same \(\tau=4\,\mathrm{h}\)). TwinCanvas draws every 6th sensor (LoD) so 250 points never sit on the rAF particle budget.
+
+### 13.3 LIVE MONITORING vs PREDICTIVE TWIN
+
+| Mode | `opsMode` | Envelope | Spatial field |
+| --- | --- | --- | --- |
+| LIVE MONITORING | `"live"` (default literal) | Current HKO rolling envelope | IDW residual on every footprint |
+| PREDICTIVE TWIN | `"predictive"` | July 2022 plate, peak 37.4°C | Synthetic three-station field |
+
+HUD: `data-testid="live-ops-toggle"` / `ops-mode-live` / `ops-mode-predictive`. Scenario chips and ⌘K “Live monitoring” / “Predictive twin” flip the same state. Policy-drawer “live envelope” calls `enterLiveMonitoring`.
+
+### 13.4 SSR / hydration
+
+| Gate | Evidence |
+| --- | --- |
+| First paint | `MissionControl` remains behind `ClientOnly` + `MissionShell` (`data-hydrating="1"`). Toggle is not in the SSR fallback. |
+| Default | `DEFAULT_OPS_MODE = "live"` compile-time literal. No `window` / `localStorage` / `Date.now()` in `ops-mode.ts` or `sensor-network.ts`. |
+| `layout.tsx` | `suppressHydrationWarning` on `<html>` / `<body>` unchanged. |
+| Edge vs Node | Telemetry route does not import `lib/hko/ingest.ts`. |
+| Tests | `npm run test:telemetry` — IDW identity, 250 sensors, bit-stability, AC lag, live CSV poll, hydration source audit |
+
+Zero-deletion invariant unchanged from §12.
+
+
 
