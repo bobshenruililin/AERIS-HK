@@ -8,6 +8,7 @@ import { solarPositionHk } from "@/lib/solar-engine";
 import type { PlaybackSpeed } from "@/lib/types";
 import { GlassPanel } from "./GlassPanel";
 import { FormulaTip } from "./FormulaTooltip";
+import { CitationMark } from "@/components/copilot/useCitationPulse";
 
 const SPEEDS: PlaybackSpeed[] = [1, 2, 5];
 
@@ -38,7 +39,9 @@ export function TimeScrubber() {
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </button>
             <div>
-              <div className="font-mono text-lg text-cyan-50" data-testid="sim-hour">{formatHourLabel(hour)} HKT</div>
+              <div className="font-mono text-lg text-cyan-50" data-testid="sim-hour">
+                <CitationMark highlight="wbgt">{formatHourLabel(hour)} HKT</CitationMark>
+              </div>
               <div className="text-[10px] uppercase tracking-widest text-slate-400">
                 24-hour thermal inertia timeline
               </div>
@@ -85,6 +88,7 @@ export function TimeScrubber() {
             <span className="sr-only">ISO 7243 WBGT / operational UTCI</span>
           </FormulaTip>
         </div>
+        <CitationMark highlight="wbgt" block className="block">
         <input
           type="range"
           min={0}
@@ -97,7 +101,9 @@ export function TimeScrubber() {
           }}
           className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-700 accent-cyan-400"
           aria-label="Diurnal hour scrubber"
+          data-testid="diurnal-scrubber"
         />
+        </CitationMark>
         <div className="mt-1 flex justify-between text-[10px] text-slate-500">
           <span>00:00</span>
           <span>06:00</span>

@@ -11,6 +11,7 @@ import { ExecutiveBriefing } from "@/components/ui/ExecutiveBriefing";
 import { CausalStrip } from "@/components/ui/CausalStrip";
 import { BriefingButton } from "@/components/simulation/BriefingTour";
 import { FormulaTip } from "@/components/ui/FormulaTooltip";
+import { CitationMark } from "@/components/copilot/useCitationPulse";
 
 export function Header() {
   const {
@@ -84,10 +85,14 @@ export function Header() {
         {compact ? (
           <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[10px] text-slate-400">
             <span>
-              <FormulaTip id="dlnm-rr">{impact.admissionsAverted.toFixed(1)} averted</FormulaTip>
+              <CitationMark highlight="rr">
+                <FormulaTip id="dlnm-rr">{impact.admissionsAverted.toFixed(1)} averted</FormulaTip>
+              </CitationMark>
             </span>
             <span>
-              <FormulaTip id="utci">{snapshot.regionalMeanWbgt.toFixed(1)}° WBGT</FormulaTip>
+              <CitationMark highlight="wbgt">
+                <FormulaTip id="utci">{snapshot.regionalMeanWbgt.toFixed(1)}° WBGT</FormulaTip>
+              </CitationMark>
             </span>
             <span>{(snapshot.clusterBedStress * 100).toFixed(1)}% beds</span>
             <span>solar {elev.toFixed(1)}° · breeze {(forcing.seaBreezeScale * 100).toFixed(0)}%</span>
@@ -106,6 +111,7 @@ export function Header() {
             testId="mission-admissions-averted"
             tone="emerald"
             formulaId="dlnm-rr"
+            citation="rr"
           />
           <Hero
             label="Roofs locked"
@@ -114,6 +120,7 @@ export function Header() {
             sub={`/ ${coolRoofPlan ? String(Math.round(coolRoofPlan.totalRoofM2)).replace(/\B(?=(\d{3})+(?!\d))/g, ",") : "—"} m² stock`}
             testId="mission-roofs"
             tone="amber"
+            citation="roofs"
           />
           <Hero
             label="Albedo budget used"
@@ -122,13 +129,7 @@ export function Header() {
             sub={`m² of ${Math.round(policy.coolRoofBudgetM2)}`}
             tone="amber"
           />
-          <Hero
-            label="Micro-WBGT"
-            zh="微氣候濕球黑球"
-            value={`${snapshot.regionalMeanWbgt.toFixed(1)}°`}
-            tone="cyan"
-            formulaId="utci"
-          />
+          <Hero label="Micro-WBGT" zh="微氣候濕球黑球" value={`${snapshot.regionalMeanWbgt.toFixed(1)}°`} tone="cyan" formulaId="utci" citation="wbgt" />
           <Hero label="HA bed stress" zh="病床壓力" value={`${bedPct.toFixed(1)}%`} tone={bedPct >= 100 ? "red" : "cyan"} />
         </div>
 
@@ -173,17 +174,21 @@ export function Header() {
                 : "HA ingest…"}
           </span>
           <span data-testid="duckdb-ingest-ms">
-            {analytics
-              ? `${analytics.engine}${analytics.arrowIpc ? " IPC" : ""} ingest ${analytics.queryLatencyMs.toFixed(0)} ms`
-              : "DuckDB warming"}
+            <CitationMark highlight="duckdb">
+              {analytics
+                ? `${analytics.engine}${analytics.arrowIpc ? " IPC" : ""} ingest ${analytics.queryLatencyMs.toFixed(0)} ms`
+                : "DuckDB warming"}
+            </CitationMark>
           </span>
           <span data-testid="scrub-query-ms">
             Arrow scrub {scrubQueryMs.toFixed(2)} ms
           </span>
           <span data-testid="spatial-grid-stats">
-            {spatialIndex.vectorCount
-              ? `ENU grid ${spatialIndex.vectorCount.toLocaleString()} · bbox ${spatialIndex.bboxMs.toFixed(2)} ms · kNN ${spatialIndex.knnMs.toFixed(2)} ms`
-              : "ENU grid…"}
+            <CitationMark highlight="grid">
+              {spatialIndex.vectorCount
+                ? `ENU grid ${spatialIndex.vectorCount.toLocaleString()} · bbox ${spatialIndex.bboxMs.toFixed(2)} ms · kNN ${spatialIndex.knnMs.toFixed(2)} ms`
+                : "ENU grid…"}
+            </CitationMark>
           </span>
           <span>
             {spatial.authority === "postgis-hk80"
@@ -191,11 +196,15 @@ export function Header() {
               : `Seed HK80 · ${spatial.buildingCount}`}
           </span>
           <span>
-            {coolRoofPlan
-              ? `exact knapsack · ${coolRoofPlan.rankEngine === "duckdb-wasm" ? "DuckDB windows rank" : "JS rank"}`
-              : "optimiser…"}
+            <CitationMark highlight="knapsack">
+              {coolRoofPlan
+                ? `exact knapsack · ${coolRoofPlan.rankEngine === "duckdb-wasm" ? "DuckDB windows rank" : "JS rank"}`
+                : "optimiser…"}
+            </CitationMark>
           </span>
-          <span>episode {episodeId}</span>
+          <span>
+            <CitationMark highlight="neon">episode {episodeId}</CitationMark>
+          </span>
         </div>
         <CausalStrip />
         </div>
@@ -217,6 +226,7 @@ function Hero({
   testId,
   tone,
   formulaId,
+  citation,
 }: {
   label: string;
   zh: string;
@@ -225,6 +235,7 @@ function Hero({
   testId?: string;
   tone: "emerald" | "amber" | "cyan" | "red";
   formulaId?: "utci" | "pmv" | "dlnm-rr";
+  citation?: "roofs" | "knapsack" | "rr" | "wbgt";
 }) {
   const color =
     tone === "emerald"
@@ -234,7 +245,7 @@ function Hero({
         : tone === "red"
           ? "text-red-300"
           : "text-cyan-100";
-  return (
+  const body = (
     <div className="rounded-xl bg-white/5 px-3 py-2">
       <div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">
         {formulaId ? <FormulaTip id={formulaId}>{label}</FormulaTip> : label}
@@ -245,4 +256,5 @@ function Hero({
       <div className="text-[10px] text-slate-500">{zh}{sub ? ` · ${sub}` : ""}</div>
     </div>
   );
+  return citation ? <CitationMark highlight={citation}>{body}</CitationMark> : body;
 }

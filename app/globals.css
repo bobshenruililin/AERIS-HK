@@ -56,3 +56,22 @@ input[type="range"]::-webkit-slider-thumb {
     text-wrap: balance;
   }
 }
+
+[data-citation].aeris-cite-hit,
+.aeris-cite-hit {
+  outline: 2px solid rgba(251, 191, 36, 0.9);
+  outline-offset: 2px;
+  background-color: rgba(251, 191, 36, 0.14);
+  border-radius: 0.4rem;
+  animation: aeris-cite-pulse 1.05s ease-in-out 4;
+}
+
+@keyframes aeris-cite-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+  }
+  50% {
+    box-shadow: 0 0 18px 4px rgba(251, 191, 36, 0.5);
+  }
+}

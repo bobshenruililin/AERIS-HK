@@ -32,6 +32,7 @@ export function CommandPalette() {
     applyScenario,
     savedRuns,
     loadSimulation,
+    setCopilotPanelOpen,
   } = sim;
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -146,7 +147,18 @@ export function CommandPalette() {
       icon: "scenario",
       run: () => applyScenario(s.id as StressScenarioId),
     }));
+    const copilotItems: PaletteItem[] = [
+      {
+        id: "ask-copilot",
+        group: "Copilot",
+        label: "Ask Spatial Policy Copilot",
+        hint: "NL → tools, fly camera, citations",
+        icon: "policy",
+        run: () => setCopilotPanelOpen(true),
+      },
+    ];
     const all = [
+      ...copilotItems,
       ...districtItems,
       ...streetItems,
       ...buildingItems,
@@ -166,7 +178,7 @@ export function CommandPalette() {
         ) || STREET_QUERIES.some((row) => row.q.some((alias) => alias.includes(q) || q.includes(alias)) && item.label.toLowerCase().includes(row.street.toLowerCase()));
       })
       .slice(0, 24);
-  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario, savedRuns, loadSimulation]);
+  }, [buildings, query, focusBuilding, setPolicy, hudLayers, setHudLayer, applyScenario, savedRuns, loadSimulation, setCopilotPanelOpen]);
 
   return (
     <AnimatePresence>

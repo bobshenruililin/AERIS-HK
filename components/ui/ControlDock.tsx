@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Crosshair, Globe2, Hexagon, Pause, Play, Share2, ThermometerSun, Wind } from "lucide-react";
+import { Box, Crosshair, Globe2, Hexagon, Pause, Play, Share2, Sparkles, ThermometerSun, Wind } from "lucide-react";
 import { useSimulation } from "@/components/simulation/SimulationProvider";
 import { HUD_PRESETS, type HudLayers, type HudPresetId } from "@/lib/hud";
 import { STRESS_SCENARIOS, type StressScenarioId } from "@/lib/scenarios";
@@ -32,6 +32,7 @@ export function ControlDock() {
     saveSimulation,
     simulationSaving,
     simId,
+    setCopilotPanelOpen,
   } = useSimulation();
 
   return (
@@ -70,6 +71,15 @@ export function ControlDock() {
             className="ml-1 rounded-full px-2.5 py-1.5 font-mono text-[10px] text-slate-400 hover:bg-white/10 hover:text-cyan-100"
           >
             ⌘K
+          </button>
+          <button
+            type="button"
+            data-testid="copilot-dock"
+            onClick={() => setCopilotPanelOpen(true)}
+            className="ml-0.5 flex items-center gap-1 rounded-full px-2.5 py-1.5 font-mono text-[10px] text-amber-100 hover:bg-amber-400/15"
+          >
+            <Sparkles className="h-3 w-3" />
+            Copilot
           </button>
         </div>
       </div>

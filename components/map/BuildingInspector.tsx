@@ -4,6 +4,7 @@ import { useLayoutEffect, useState } from "react";
 import { useSimulation, useSelectedBuildingState } from "@/components/simulation/SimulationProvider";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { FormulaTip } from "@/components/ui/FormulaTooltip";
+import { CitationMark } from "@/components/copilot/useCitationPulse";
 import { INDOOR_HAZARD_C } from "@/lib/constants";
 import type { InspectorTab } from "@/lib/hud";
 import type { FormulaId } from "@/lib/formulas";
@@ -115,10 +116,12 @@ export function BuildingInspector() {
         {inspectorTab === "biophysics" || !expanded ? (
           <div data-testid="inspector-biophysics">
             <div className="mt-2 font-mono text-[10px] text-slate-400">
-              <FormulaTip id="gagge">
-                S = M − W − E − R − C · {g.heatStorage.toFixed(1)} = {g.metabolicRate.toFixed(1)} − {g.externalWork.toFixed(1)} −{" "}
-                {g.evaporativeLoss.toFixed(1)} − {g.radiativeLoss.toFixed(1)} − {g.convectiveLoss.toFixed(1)} W/m²
-              </FormulaTip>
+              <CitationMark highlight="gagge">
+                <FormulaTip id="gagge">
+                  S = M − W − E − R − C · {g.heatStorage.toFixed(1)} = {g.metabolicRate.toFixed(1)} − {g.externalWork.toFixed(1)} −{" "}
+                  {g.evaporativeLoss.toFixed(1)} − {g.radiativeLoss.toFixed(1)} − {g.convectiveLoss.toFixed(1)} W/m²
+                </FormulaTip>
+              </CitationMark>
             </div>
             <div className="mt-1.5 flex h-8 items-end gap-1">
               {fluxes.map((f) => (
@@ -132,15 +135,15 @@ export function BuildingInspector() {
               ))}
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-              <Stat label="Micro-WBGT" value={`${state.microWbgt.toFixed(1)}°C`} warn={state.microWbgt >= 30} formulaId="utci" />
+              <Stat label="Micro-WBGT" value={`${state.microWbgt.toFixed(1)}°C`} warn={state.microWbgt >= 30} formulaId="utci" citation="wbgt" />
               <Stat label="Indoor inertia" value={`${state.indoorTa.toFixed(1)}°C`} warn={indoorHot} />
               <Stat label="CVI" value={state.cvi.toFixed(1)} warn={state.cvi >= 70} formulaId="cvi" />
               <Stat label="Sky-view Φ" value={state.skyViewFactor.toFixed(2)} />
               <Stat label="Canyon H/W" value={state.canyonAspect.toFixed(2)} />
-              <Stat label="Roof SW" value={`${state.roofAbsorbedWm2.toFixed(0)} W/m²`} />
+              <Stat label="Roof SW" value={`${state.roofAbsorbedWm2.toFixed(0)} W/m²`} formulaId="sol-air" citation="roofs" />
               <Stat label="Solar el." value={`${state.solarElevationDeg.toFixed(1)}°`} />
               <Stat label="Azimuth" value={`${state.solarAzimuthDeg.toFixed(0)}°`} />
-              <Stat label="PMV" value={state.pmv.toFixed(2)} warn={state.pmv >= 1.5} formulaId="pmv" />
+              <Stat label="PMV" value={state.pmv.toFixed(2)} warn={state.pmv >= 1.5} formulaId="pmv" citation="pmv" />
               <Stat label="PPD" value={`${state.ppd.toFixed(0)}%`} warn={state.ppd >= 40} formulaId="pmv" />
               <Stat
                 label="Battery ΔT"
@@ -203,11 +206,13 @@ function Stat({
   value,
   warn,
   formulaId,
+  citation,
 }: {
   label: string;
   value: string;
   warn?: boolean;
   formulaId?: FormulaId;
+  citation?: "wbgt" | "pmv" | "roofs" | "gagge" | "rr";
 }) {
   const body = (
     <div className={`rounded-lg px-2 py-1.5 ${warn ? "bg-amber-500/15 text-amber-100" : "bg-white/5 text-slate-200"}`}>
@@ -215,5 +220,6 @@ function Stat({
       <div className="font-mono text-xs">{value}</div>
     </div>
   );
-  return formulaId ? <FormulaTip id={formulaId}>{body}</FormulaTip> : body;
+  const tipped = formulaId ? <FormulaTip id={formulaId}>{body}</FormulaTip> : body;
+  return citation ? <CitationMark highlight={citation}>{tipped}</CitationMark> : tipped;
 }

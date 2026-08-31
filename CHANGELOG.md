@@ -2,6 +2,20 @@
 
 All notable changes to AERIS-HK are documented here.
 
+## [0.13.0] — 2026-08-30
+
+### Added
+
+- Spatial Policy Copilot: `components/copilot/PolicyAgent.tsx` chat HUD plus `lib/agent/` tool schemas, Vercel AI SDK runtime (`generateText` tools + `generateObject` Zod plan), and a deterministic intent parser when no LLM key is set.
+- Four structured tools: `run_counterfactual`, `focus_hotspot`, `query_hospital_capacity`, `compare_scenarios`. Route: `POST /api/agent` (`server-only` `lib/agent/runtime.ts`).
+- Real-time map sync: `TWIN_LOOKAT_EVENT` flies TwinCanvas and Deck.gl (`FlyToInterpolator`) to the canyon or hospital; diurnal slider jumps to peak CVI hour (or 3 AM for 劏房 battery); green/red CVI(B)−CVI(A) polygons on both renderers (`copilot-diff` GeoJsonLayer).
+- Click-to-highlight physics citations (`[Sol-Air Equation: Eq. 3]`, live DuckDB footprint counts, `[Neon Simulation Run #<id>]`) pulse matching HUD `data-citation` hooks.
+- `npm run test:agent`. Delivery ledger in `SYSTEM_INTELLIGENCE.md` §11.
+
+### Changed
+
+- Copilot ambient ΔT shifts the live/scenario HKO envelope through `shiftEnvelopeTemp` before Gagge cache recompute. Zod is 3.25.x so the Vercel AI SDK can import `zod/v3`.
+
 ## [0.12.0] — 2026-08-30
 
 ### Added
